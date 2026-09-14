@@ -741,7 +741,7 @@ function cast(id: AbilityId): void {
 function gather(): void {
   if (player.position.distanceTo(cinderCenter) <= 10) {
     if (cinderState === 'locked') {
-      showMessage('RESTORE MAERA'S SIGNAL FIRST');
+      showMessage("RESTORE MAERA'S SIGNAL FIRST");
     } else if (cinderState === 'available') {
       cinderState = 'complete';
       xp += 250;
