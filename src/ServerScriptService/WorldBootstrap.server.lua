@@ -51,7 +51,7 @@ local function makeEnemy(position, index)
     humanoid.MaxHealth = Config.Enemy.MaxHealth
     humanoid.Health = Config.Enemy.MaxHealth
     humanoid.DisplayName = Config.Enemy.Name
-    humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.Viewport
+    humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.Subject
     humanoid.WalkSpeed = 0
     humanoid.Parent = enemy
 
