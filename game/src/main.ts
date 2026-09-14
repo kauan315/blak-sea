@@ -89,6 +89,11 @@ app.innerHTML = `
       </div>
       <div class="craft-line">C · craft Tideguard Elixir <small>1 fruit + 3 fiber + 1 shard</small></div>
     </div>
+    <div class="quest-panel" id="quest-panel">
+      <div class="quest-kicker">STORY SIGNAL</div>
+      <div class="quest-title" id="quest-title">Find Maera Voss</div>
+      <div class="quest-copy" id="quest-copy">Press F near the camp survivor.</div>
+    </div>
   </div>
 `;
 
@@ -309,6 +314,36 @@ function makeBoss(): Boss {
 const boss = makeBoss();
 const drops: Drop[] = [];
 
+function makeQuestNPC(): THREE.Group {
+  const npc = new THREE.Group();
+  npc.name = 'Maera Voss';
+  npc.position.set(0, heightAt(0, 23), 23);
+  const skin = new THREE.MeshStandardMaterial({ color: 0xb87563, roughness: 0.68 });
+  const coat = new THREE.MeshStandardMaterial({ color: 0x162e3b, roughness: 0.54, metalness: 0.15 });
+  const accent = new THREE.MeshStandardMaterial({ color: 0xf0b35b, emissive: 0x713d17, emissiveIntensity: 0.7, roughness: 0.36, metalness: 0.35 });
+  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.62, 1.15, 6, 12), coat);
+  body.position.y = 1.55;
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.45, 18, 14), skin);
+  head.position.y = 3;
+  const scarf = new THREE.Mesh(new THREE.TorusGeometry(0.57, 0.09, 6, 20), accent);
+  scarf.position.y = 2.22;
+  scarf.rotation.x = Math.PI / 2;
+  const staff = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 2.9, 8), accent);
+  staff.position.set(0.86, 1.55, 0.08);
+  staff.rotation.z = -0.12;
+  const beacon = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 10), accent);
+  beacon.position.set(0.86, 3.08, 0.08);
+  for (const part of [body, head, scarf, staff, beacon]) part.castShadow = true;
+  npc.add(body, head, scarf, staff, beacon);
+  const light = new THREE.PointLight(0xf0b35b, 1.5, 9);
+  light.position.set(0.86, 3.1, 0.08);
+  npc.add(light);
+  world.add(npc);
+  return npc;
+}
+
+const questNpc = makeQuestNPC();
+
 const berries: THREE.Mesh[] = [];
 for (let i = 0; i < 7; i += 1) {
   const x = Math.sin(i * 5.4) * 54;
@@ -329,6 +364,8 @@ let level = 1;
 let xp = 0;
 let shells = 0;
 const inventory: Record<string, number> = { wildFruit: 0, seaFiber: 0, emberShard: 0, wardenCore: 0 };
+let questState: 'available' | 'active' | 'complete' = 'available';
+let marauderKills = 0;
 let survivalClock = 0;
 let dayClock = 1.3;
 const keys = new Set<string>();
@@ -349,7 +386,7 @@ function showMessage(text: string): void {
 }
 
 function saveGame(): void {
-  localStorage.setItem('tidebreakers-save', JSON.stringify({ health, hunger, thirst, level, xp, shells, inventory }));
+  localStorage.setItem('tidebreakers-save', JSON.stringify({ health, hunger, thirst, level, xp, shells, inventory, questState, marauderKills }));
 }
 
 function loadGame(): void {
@@ -364,12 +401,14 @@ function loadGame(): void {
     xp = typeof saved.xp === 'number' ? saved.xp : xp;
     shells = typeof saved.shells === 'number' ? saved.shells : shells;
     if (saved.inventory && typeof saved.inventory === 'object') Object.assign(inventory, saved.inventory);
+    if (saved.questState === 'available' || saved.questState === 'active' || saved.questState === 'complete') questState = saved.questState;
+    if (typeof saved.marauderKills === 'number') marauderKills = saved.marauderKills;
   } catch {
     localStorage.removeItem('tidebreakers-save');
   }
 }
 
-const gameSave = { health, hunger, thirst, level, xp, shells, inventory };
+const gameSave = { health, hunger, thirst, level, xp, shells, inventory, questState, marauderKills };
 loadGame();
 
 function gainXp(amount: number): void {
@@ -415,6 +454,7 @@ function damageEnemy(enemy: Enemy, amount: number, knockback: THREE.Vector3): vo
     enemy.respawnTimer = 7;
     xp += 35;
     shells += 18;
+    marauderKills += 1;
     spawnDrop('emberShard', 1, enemy.group.position, 0xff743e);
     spawnDrop('seaFiber', 1, enemy.group.position.clone().add(new THREE.Vector3(0.8, 0, 0.3)), 0x77d6a1);
     gainXp(0);
@@ -559,6 +599,24 @@ function cast(id: AbilityId): void {
 }
 
 function gather(): void {
+  if (player.position.distanceTo(questNpc.position) <= 5.5) {
+    if (questState === 'available') {
+      questState = 'active';
+      showMessage('QUEST STARTED  /  ECHOES IN THE REEDS');
+    } else if (questState === 'active' && marauderKills >= 3) {
+      questState = 'complete';
+      xp += 200;
+      shells += 120;
+      inventory.seaFiber += 2;
+      gainXp(0);
+      showMessage('QUEST COMPLETE  /  +200 XP  +120 SHELLS');
+    } else if (questState === 'active') {
+      showMessage(`MAERA: ${marauderKills}/3 marauders defeated`);
+    } else {
+      showMessage('MAERA: The signal is quiet now');
+    }
+    return;
+  }
   for (const drop of [...drops]) {
     if (drop.mesh.position.distanceTo(player.position) <= 4.5) {
       collectDrop(drop);
@@ -770,6 +828,18 @@ function updateHud(): void {
   for (const item of ['wildFruit', 'seaFiber', 'emberShard', 'wardenCore']) {
     const element = document.querySelector<HTMLElement>(`#inv-${item}`);
     if (element) element.textContent = String(inventory[item] ?? 0);
+  }
+  const questTitle = document.querySelector<HTMLElement>('#quest-title')!;
+  const questCopy = document.querySelector<HTMLElement>('#quest-copy')!;
+  if (questState === 'available') {
+    questTitle.textContent = 'Find Maera Voss';
+    questCopy.textContent = 'Press F near the camp survivor.';
+  } else if (questState === 'active') {
+    questTitle.textContent = 'Echoes in the Reeds';
+    questCopy.textContent = `Defeat Marauders: ${marauderKills}/3 · return to Maera`;
+  } else {
+    questTitle.textContent = 'Signal Restored';
+    questCopy.textContent = 'The camp has a future again.';
   }
   setBar('health', health);
   setBar('hunger', hunger);
