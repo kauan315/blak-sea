@@ -1,0 +1,52 @@
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap');
+
+:root {
+  color-scheme: dark;
+  font-family: Inter, system-ui, sans-serif;
+  color: #edf7ff;
+  background: #07101a;
+}
+
+* { box-sizing: border-box; }
+html, body, #app { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+body { background: #07101a; }
+canvas { display: block; width: 100%; height: 100%; cursor: crosshair; }
+
+.hud { position: fixed; inset: 0; pointer-events: none; }
+.brand { position: absolute; top: 26px; left: 30px; letter-spacing: .12em; text-transform: uppercase; font-family: 'Barlow Condensed', sans-serif; font-size: 22px; font-weight: 700; text-shadow: 0 2px 12px #00131f; }
+.brand span { display: block; margin-top: 4px; color: #74c9e8; font-family: Inter, sans-serif; font-size: 10px; letter-spacing: .25em; font-weight: 600; }
+
+.status { position: absolute; left: 30px; bottom: 30px; width: min(330px, calc(100vw - 60px)); padding: 17px 18px; border: 1px solid rgba(174, 226, 245, .2); border-radius: 15px; background: linear-gradient(145deg, rgba(7, 19, 31, .88), rgba(9, 33, 47, .7)); backdrop-filter: blur(14px); box-shadow: 0 16px 50px rgba(0,0,0,.28); }
+.status-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 12px; }
+.level { font-family: 'Barlow Condensed', sans-serif; font-size: 22px; font-weight: 700; letter-spacing: .05em; }
+.currency { color: #f5d17b; font-size: 12px; font-weight: 600; }
+.bar-row { display: grid; grid-template-columns: 62px 1fr 35px; gap: 8px; align-items: center; margin: 7px 0; color: #afd0df; font-size: 10px; text-transform: uppercase; letter-spacing: .08em; }
+.bar { height: 7px; overflow: hidden; border-radius: 20px; background: rgba(255,255,255,.12); }
+.bar > i { display: block; width: 50%; height: 100%; border-radius: inherit; transition: width .2s ease; }
+#health-bar { background: #f07268; } #hunger-bar { background: #eebc6a; } #thirst-bar { background: #65c8ef; } #stamina-bar { background: #9ae69a; }
+.bar-value { text-align: right; color: #f5fbff; font-variant-numeric: tabular-nums; }
+
+.abilities { position: absolute; right: 30px; bottom: 30px; display: flex; gap: 9px; align-items: end; }
+.ability { min-width: 128px; padding: 11px 13px; border: 1px solid rgba(189, 229, 244, .2); border-radius: 12px; background: rgba(7, 19, 31, .75); backdrop-filter: blur(12px); box-shadow: 0 14px 40px rgba(0,0,0,.2); }
+.ability-key { display: inline-grid; place-items: center; width: 23px; height: 23px; margin-right: 7px; border-radius: 6px; color: #07131d; background: #dceef7; font-family: 'Barlow Condensed', sans-serif; font-size: 16px; font-weight: 700; }
+.ability-name { display: inline; color: #f4fbff; font-size: 11px; font-weight: 600; }
+.ability-cost { display: block; margin-top: 8px; color: #8fb6c9; font-size: 9px; text-transform: uppercase; letter-spacing: .1em; }
+.ability.cooling { opacity: .5; }
+
+.center-message { position: absolute; top: 13%; left: 50%; transform: translateX(-50%); padding: 10px 18px; border: 1px solid rgba(255,255,255,.15); border-radius: 40px; background: rgba(5, 17, 26, .62); color: #f7de9b; font-size: 13px; font-weight: 600; letter-spacing: .03em; opacity: 0; transition: opacity .25s; backdrop-filter: blur(9px); }
+.center-message.show { opacity: 1; }
+
+.crosshair { position: absolute; top: 50%; left: 50%; width: 20px; height: 20px; transform: translate(-50%, -50%); opacity: .55; }
+.crosshair::before, .crosshair::after { content: ''; position: absolute; background: #e9f7ff; box-shadow: 0 0 8px #5fc9ef; }
+.crosshair::before { top: 9px; left: 0; width: 20px; height: 2px; } .crosshair::after { top: 0; left: 9px; width: 2px; height: 20px; }
+
+.help { position: absolute; top: 28px; right: 30px; color: rgba(232,246,255,.72); font-size: 11px; text-align: right; line-height: 1.7; }
+.help b { color: #f2fbff; }
+
+@media (max-width: 720px) {
+  .brand { top: 16px; left: 17px; font-size: 17px; }
+  .help { top: 16px; right: 17px; font-size: 9px; }
+  .status { left: 16px; bottom: 16px; width: 250px; padding: 12px; }
+  .abilities { right: 16px; bottom: 16px; flex-direction: column; gap: 5px; align-items: stretch; }
+  .ability { min-width: 142px; padding: 8px 10px; }
+}
