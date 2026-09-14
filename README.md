@@ -26,7 +26,7 @@ Open the local URL printed by Vite. For a production check:
 - E: Rift Current, a close-range water pull
 - R: Stonebloom, a crystal shockwave
 - Left mouse: blade strike
-- F: gather a glowing wild fruit
+- F: talk to Maera, gather fruit, or collect nearby loot
 
 ## Stack
 
@@ -35,6 +35,10 @@ Open the local URL printed by Vite. For a production check:
 - HTML and CSS for the HUD.
 - Vite for the development server and production build.
 - LocalStorage for the first offline save layer.
+
+## Story slice
+
+Maera Voss is stranded beside the starting camp. Talk to her with F to start Echoes in the Reeds, defeat three Marauders, and return for XP, Shells, and materials. Mission state and rewards persist in the local save.
 
 ## Current vertical slice
 
