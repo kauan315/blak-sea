@@ -55,6 +55,7 @@ canvas { display: block; width: 100%; height: 100%; cursor: crosshair; }
 .ability-key { display: inline-grid; place-items: center; width: 23px; height: 23px; margin-right: 7px; border-radius: 6px; color: #07131d; background: #dceef7; font-family: 'Barlow Condensed', sans-serif; font-size: 16px; font-weight: 700; }
 .ability-name { display: inline; color: #f4fbff; font-size: 11px; font-weight: 600; }
 .ability-cost { display: block; margin-top: 8px; color: #8fb6c9; font-size: 9px; text-transform: uppercase; letter-spacing: .1em; }
+.ability-mastery { display: block; margin-top: 4px; color: #f0b35b; font-size: 8px; letter-spacing: .08em; }
 .ability.cooling { opacity: .5; }
 
 .center-message { position: absolute; top: 13%; left: 50%; transform: translateX(-50%); padding: 10px 18px; border: 1px solid rgba(255,255,255,.15); border-radius: 40px; background: rgba(5, 17, 26, .62); color: #f7de9b; font-size: 13px; font-weight: 600; letter-spacing: .03em; opacity: 0; transition: opacity .25s; backdrop-filter: blur(9px); }
