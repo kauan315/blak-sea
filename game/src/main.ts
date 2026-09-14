@@ -97,6 +97,20 @@ app.innerHTML = `
       <div class="quest-title" id="quest-title">Find Maera Voss</div>
       <div class="quest-copy" id="quest-copy">Press F near the camp survivor.</div>
     </div>
+    <div class="mobile-controls" id="mobile-controls" aria-label="Touch controls">
+      <div class="touch-joystick" id="touch-joystick" aria-label="Move"><div class="joystick-knob" id="joystick-knob"></div></div>
+      <div class="touch-actions">
+        <button class="touch-action touch-run" data-touch-action="run">RUN</button>
+        <button class="touch-action touch-jump" data-touch-action="jump">JUMP</button>
+        <button class="touch-action touch-dodge" data-touch-action="dodge">ROLL</button>
+        <button class="touch-action touch-attack" data-touch-action="attack">ATK</button>
+        <button class="touch-action touch-guard" data-touch-action="guard">GUARD</button>
+        <button class="touch-action touch-power power-q" data-touch-action="power:emberwake">Q</button>
+        <button class="touch-action touch-power power-e" data-touch-action="power:riftCurrent">E</button>
+        <button class="touch-action touch-power power-r" data-touch-action="power:stonebloom">R</button>
+        <button class="touch-action touch-interact" data-touch-action="interact">USE</button>
+      </div>
+    </div>
   </div>
 `;
 
@@ -496,6 +510,9 @@ let marauderKills = 0;
 let survivalClock = 0;
 let dayClock = 1.3;
 const keys = new Set<string>();
+const touchMovement = new THREE.Vector2();
+let touchRunning = false;
+let jumpVelocity = 0;
 const cooldowns: Record<AbilityId, number> = { emberwake: 0, riftCurrent: 0, stonebloom: 0 };
 const abilityMastery: Record<AbilityId, number> = { emberwake: 1, riftCurrent: 1, stonebloom: 1 };
 const abilityMasteryXp: Record<AbilityId, number> = { emberwake: 0, riftCurrent: 0, stonebloom: 0 };
@@ -665,6 +682,7 @@ function createSlashEffect(origin: THREE.Vector3, direction: THREE.Vector3): voi
 }
 
 function getMovementDirection(): THREE.Vector3 {
+  if (touchMovement.lengthSq() > 0.01) return new THREE.Vector3(touchMovement.x, 0, touchMovement.y).normalize();
   const movement = new THREE.Vector3(
     (keys.has('d') ? 1 : 0) - (keys.has('a') ? 1 : 0),
     0,
@@ -672,6 +690,14 @@ function getMovementDirection(): THREE.Vector3 {
   );
   if (movement.lengthSq() === 0) return new THREE.Vector3(0, 0, 1).applyQuaternion(player.quaternion).normalize();
   return movement.normalize();
+}
+
+function jump(): void {
+  if (aboardBoat || isWaterAt(player.position.x, player.position.z) || jumpVelocity !== 0) return;
+  const ground = groundAt(player.position.x, player.position.z);
+  if (player.position.y > ground + 0.08) return;
+  jumpVelocity = 8.6;
+  showMessage('JUMP');
 }
 
 function startDodge(): void {
@@ -1030,13 +1056,14 @@ function updatePlayer(dt: number): void {
   }
 
   const movement = getMovementDirection();
-  const isMoving = keys.has('w') || keys.has('a') || keys.has('s') || keys.has('d');
+  const isMoving = touchMovement.lengthSq() > 0.01 || keys.has('w') || keys.has('a') || keys.has('s') || keys.has('d');
+  const running = touchRunning || keys.has('control');
   const swimming = isWaterAt(player.position.x, player.position.z);
   if (isMoving) {
-    const speed = swimming ? 4.8 : (stamina > 2 ? 7.2 : 2.4);
+    const speed = swimming ? 4.8 : (running && stamina > 4 ? 10.5 : (stamina > 2 ? 7.2 : 2.4));
     player.position.add(movement.clone().multiplyScalar(speed * dt));
     player.rotation.y = Math.atan2(movement.x, movement.z);
-    stamina = Math.max(0, stamina - dt * (swimming ? 5.5 : 3.2));
+    stamina = Math.max(0, stamina - dt * (swimming ? 5.5 : (running ? 6.5 : 3.2)));
   }
   walkClock += dt * (isMoving ? 11 : 2.2);
   const rig = player.userData.rig as Record<string, THREE.Object3D>;
@@ -1051,7 +1078,18 @@ function updatePlayer(dt: number): void {
 
   player.position.x = THREE.MathUtils.clamp(player.position.x, -260, 260);
   player.position.z = THREE.MathUtils.clamp(player.position.z, -260, 260);
-  player.position.y = swimming ? WATER_LEVEL + 0.2 + Math.sin(survivalClock * 3.4) * 0.08 : groundAt(player.position.x, player.position.z);
+  const ground = groundAt(player.position.x, player.position.z);
+  if (swimming) {
+    player.position.y = WATER_LEVEL + 0.2 + Math.sin(survivalClock * 3.4) * 0.08;
+    jumpVelocity = 0;
+  } else {
+    jumpVelocity -= 22 * dt;
+    player.position.y += jumpVelocity * dt;
+    if (player.position.y <= ground) {
+      player.position.y = ground;
+      jumpVelocity = 0;
+    }
+  }
 }
 
 function updateCamera(): void {
@@ -1142,10 +1180,69 @@ function updateHud(): void {
   }
 }
 
+const joystick = document.querySelector<HTMLElement>('#touch-joystick')!;
+const joystickKnob = document.querySelector<HTMLElement>('#joystick-knob')!;
+let joystickPointerId: number | null = null;
+function updateTouchJoystick(event: PointerEvent): void {
+  const rect = joystick.getBoundingClientRect();
+  const radius = rect.width * 0.34;
+  const dx = event.clientX - (rect.left + rect.width / 2);
+  const dy = event.clientY - (rect.top + rect.height / 2);
+  const length = Math.hypot(dx, dy);
+  const scale = length > radius ? radius / length : 1;
+  const x = dx * scale;
+  const y = dy * scale;
+  touchMovement.set(x / radius, y / radius);
+  joystickKnob.style.transform = `translate(calc(-50% + ${x}px), calc(-50% + ${y}px))`;
+}
+function resetTouchJoystick(): void {
+  joystickPointerId = null;
+  touchMovement.set(0, 0);
+  joystickKnob.style.transform = 'translate(-50%, -50%)';
+}
+joystick.addEventListener('pointerdown', (event) => {
+  event.preventDefault();
+  joystickPointerId = event.pointerId;
+  joystick.setPointerCapture(event.pointerId);
+  updateTouchJoystick(event);
+});
+joystick.addEventListener('pointermove', (event) => {
+  if (event.pointerId === joystickPointerId) updateTouchJoystick(event);
+});
+joystick.addEventListener('pointerup', resetTouchJoystick);
+joystick.addEventListener('pointercancel', resetTouchJoystick);
+function triggerTouchAction(action: string): void {
+  if (action === 'jump') jump();
+  if (action === 'dodge') startDodge();
+  if (action === 'attack') performBasicAttack();
+  if (action === 'interact') gather();
+  if (action === 'power:emberwake') cast('emberwake');
+  if (action === 'power:riftCurrent') cast('riftCurrent');
+  if (action === 'power:stonebloom') cast('stonebloom');
+}
+document.querySelectorAll<HTMLButtonElement>('[data-touch-action]').forEach((button) => {
+  const action = button.dataset.touchAction ?? '';
+  button.addEventListener('pointerdown', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (action === 'run') touchRunning = true;
+    else if (action === 'guard') setGuarding(true);
+    else triggerTouchAction(action);
+  });
+  const release = (event: Event) => {
+    event.preventDefault();
+    if (action === 'run') touchRunning = false;
+    if (action === 'guard') setGuarding(false);
+  };
+  button.addEventListener('pointerup', release);
+  button.addEventListener('pointercancel', release);
+});
+
 window.addEventListener('keydown', (event) => {
   const key = event.key.toLowerCase();
   keys.add(key);
   if (key === 'shift') startDodge();
+  if (event.code === 'Space') jump();
   if (key === 'q') cast('emberwake');
   if (key === 'e') cast('riftCurrent');
   if (key === 'r') cast('stonebloom');
@@ -1156,8 +1253,8 @@ window.addEventListener('keydown', (event) => {
 });
 window.addEventListener('keyup', (event) => keys.delete(event.key.toLowerCase()));
 window.addEventListener('pointerdown', (event) => {
-  if (event.button === 0) performBasicAttack();
-  if (event.button === 2) setGuarding(true);
+  if (event.pointerType === 'mouse' && event.button === 0) performBasicAttack();
+  if (event.pointerType === 'mouse' && event.button === 2) setGuarding(true);
 });
 window.addEventListener('pointerup', (event) => {
   if (event.button === 2) setGuarding(false);
