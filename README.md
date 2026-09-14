@@ -1,33 +1,48 @@
 # Tidebreakers: Eclipse Sea
 
-An original Roblox action RPG about rival crews, relic powers, and dangerous islands.
+Tidebreakers is an original 3D survival action RPG. It is a standalone browser/PC prototype, not a Roblox Studio project.
 
-This repository is a clean-room project. It uses original names, gameplay code, and visual direction; it does not copy protected characters, maps, models, sounds, UI, or other assets from existing games.
+The game combines an original power-combat loop with a survival island: hunger, thirst, stamina, hostile marauders, gathering, XP, shells, third-person exploration, dynamic daylight, fog, terrain, water, shadows, and local save data.
 
-## First playable slice
+This is a clean-room project. It does not copy protected characters, maps, names, models, sounds, UI, or other assets from existing games. The visual goal is grounded, atmospheric survival realism while keeping fast anime-inspired powers readable in combat.
 
-- Server-authoritative ability requests with cooldown and range checks.
-- Three original powers: Emberwake, Rift Current, and Stonebloom.
-- A training island generated at runtime.
-- Procedural training raiders with health, XP, and Shell rewards.
-- Keyboard HUD for Q, E, and R abilities.
-- Rojo project layout for Roblox Studio iteration.
+## Run the game
 
-## Setup
+Requirements: Node.js 20+.
 
-1. Install Rojo and open Roblox Studio.
-2. Run `rojo serve` and connect the project with the Rojo plugin.
-3. Press Play in Studio.
-4. The server creates the training island and raiders automatically.
+    cd game
+    npm install
+    npm run dev
 
-## Direction
+Open the local URL printed by Vite. For a production check:
 
-The target is a modern anime-action RPG feel: readable silhouettes, layered character materials, strong hit feedback, responsive input, and effects that communicate gameplay before decoration. Visual assets should be authored for this project or licensed for it.
+    npm run build
 
-## Roadmap
+## Controls
 
-1. Playable combat slice (this repository).
-2. Combo chains, dodge, guard break, enemy AI, and boss encounters.
-3. Island streaming, quests, loot, progression, crew system, and save data.
-4. Original character rigs, animation sets, VFX, audio, and performance pass.
-5. Multiplayer balance, moderation, analytics, and release checklist.
+- WASD: move
+- Q: Emberwake, a focused fire wave
+- E: Rift Current, a close-range water pull
+- R: Stonebloom, a crystal shockwave
+- F: gather a glowing wild fruit
+- Left mouse: Emberwake
+
+## Stack
+
+- TypeScript for the game simulation and combat logic.
+- Three.js/WebGL for the 3D world, lighting, materials, shadows, particles, and camera.
+- HTML and CSS for the HUD.
+- Vite for the development server and production build.
+- LocalStorage for the first offline save layer.
+
+## Current vertical slice
+
+The first slice contains a procedural island, water, trees, rocks, a third-person character, five respawning marauders, three powers, survival meters, resource gathering, rewards, a day/night light cycle, and responsive combat feedback.
+
+## Next production milestones
+
+1. Replace procedural placeholder characters with original high-detail rigs and animation sets.
+2. Add combo chains, dodge, guard break, hit reactions, enemy states, and a boss.
+3. Add island streaming, quests, crafting, inventory, loot, and persistent profiles.
+4. Add authored PBR materials, sound design, post-processing, accessibility, and performance budgets.
+5. Package the browser build as a desktop app after the combat loop is stable.
