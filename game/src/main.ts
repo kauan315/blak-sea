@@ -72,9 +72,9 @@ app.innerHTML = `
       <div class="bar-row"><span>Stamina</span><div class="bar"><i id="stamina-bar"></i></div><span class="bar-value" id="stamina-value">100</span></div>
     </div>
     <div class="abilities">
-      <div class="ability" id="ability-emberwake"><span class="ability-key">Q</span><span class="ability-name">Emberwake</span><span class="ability-cost">15 stamina</span></div>
-      <div class="ability" id="ability-riftCurrent"><span class="ability-key">E</span><span class="ability-name">Rift Current</span><span class="ability-cost">25 stamina</span></div>
-      <div class="ability" id="ability-stonebloom"><span class="ability-key">R</span><span class="ability-name">Stonebloom</span><span class="ability-cost">35 stamina</span></div>
+      <div class="ability" id="ability-emberwake"><span class="ability-key">Q</span><span class="ability-name">Emberwake</span><span class="ability-cost">15 stamina</span><span class="ability-mastery" id="mastery-emberwake">M1 · 0/40</span></div>
+      <div class="ability" id="ability-riftCurrent"><span class="ability-key">E</span><span class="ability-name">Rift Current</span><span class="ability-cost">25 stamina</span><span class="ability-mastery" id="mastery-riftCurrent">M1 · 0/40</span></div>
+      <div class="ability" id="ability-stonebloom"><span class="ability-key">R</span><span class="ability-name">Stonebloom</span><span class="ability-cost">35 stamina</span><span class="ability-mastery" id="mastery-stonebloom">M1 · 0/40</span></div>
     </div>
     <div class="boss-hud" id="boss-hud">
       <div class="boss-title"><span>THE ABYSSAL WARDEN</span><b id="boss-phase">PHASE 1</b></div>
@@ -464,6 +464,8 @@ let survivalClock = 0;
 let dayClock = 1.3;
 const keys = new Set<string>();
 const cooldowns: Record<AbilityId, number> = { emberwake: 0, riftCurrent: 0, stonebloom: 0 };
+const abilityMastery: Record<AbilityId, number> = { emberwake: 1, riftCurrent: 1, stonebloom: 1 };
+const abilityMasteryXp: Record<AbilityId, number> = { emberwake: 0, riftCurrent: 0, stonebloom: 0 };
 let walkClock = 0;
 let dodgeTimer = 0;
 let dodgeCooldown = 0;
@@ -483,7 +485,7 @@ function showMessage(text: string): void {
 }
 
 function saveGame(): void {
-  localStorage.setItem('tidebreakers-save', JSON.stringify({ health, hunger, thirst, level, xp, shells, inventory, questState, marauderKills }));
+  localStorage.setItem('tidebreakers-save', JSON.stringify({ health, hunger, thirst, level, xp, shells, inventory, questState, marauderKills, abilityMastery, abilityMasteryXp }));
 }
 
 function loadGame(): void {
@@ -500,6 +502,12 @@ function loadGame(): void {
     if (saved.inventory && typeof saved.inventory === 'object') Object.assign(inventory, saved.inventory);
     if (saved.questState === 'available' || saved.questState === 'active' || saved.questState === 'complete') questState = saved.questState;
     if (typeof saved.marauderKills === 'number') marauderKills = saved.marauderKills;
+    for (const id of Object.keys(ABILITIES) as AbilityId[]) {
+      const savedMastery = saved.abilityMastery?.[id];
+      const savedMasteryXp = saved.abilityMasteryXp?.[id];
+      if (typeof savedMastery === 'number') abilityMastery[id] = Math.max(1, Math.min(99, Math.floor(savedMastery)));
+      if (typeof savedMasteryXp === 'number') abilityMasteryXp[id] = Math.max(0, savedMasteryXp);
+    }
   } catch {
     localStorage.removeItem('tidebreakers-save');
   }
@@ -507,6 +515,25 @@ function loadGame(): void {
 
 const gameSave = { health, hunger, thirst, level, xp, shells, inventory, questState, marauderKills };
 loadGame();
+
+function masteryThreshold(id: AbilityId): number {
+  return 40 + (abilityMastery[id] - 1) * 30;
+}
+
+function masteryDamageMultiplier(id: AbilityId): number {
+  return 1 + (abilityMastery[id] - 1) * 0.045;
+}
+
+function gainMastery(id: AbilityId, amount: number): void {
+  abilityMasteryXp[id] += amount;
+  let leveled = false;
+  while (abilityMastery[id] < 99 && abilityMasteryXp[id] >= masteryThreshold(id)) {
+    abilityMasteryXp[id] -= masteryThreshold(id);
+    abilityMastery[id] += 1;
+    leveled = true;
+  }
+  if (leveled) showMessage(`${ABILITIES[id].label} MASTERY ${abilityMastery[id]}`);
+}
 
 function gainXp(amount: number): void {
   xp += amount;
@@ -681,6 +708,8 @@ function cast(id: AbilityId): void {
   }
   cooldowns[id] = ability.cooldown;
   stamina -= ability.cost;
+  gainMastery(id, 7);
+  const poweredDamage = ability.damage * masteryDamageMultiplier(id);
   const direction = new THREE.Vector3(0, 0, 1).applyQuaternion(player.quaternion).normalize();
   const origin = player.position.clone().add(new THREE.Vector3(0, 1.8, 0));
   createPowerEffect(id, origin, direction);
@@ -693,14 +722,14 @@ function cast(id: AbilityId): void {
     if (distance > ability.range) continue;
     const knockback = distance > 0 ? toEnemy.normalize().multiplyScalar(id === 'stonebloom' ? 1.6 : 0.85) : new THREE.Vector3();
     if (id === 'emberwake' && distance > 5 && direction.dot(toEnemy.clone().normalize()) < 0.62) continue;
-    damageEnemy(enemy, ability.damage, knockback);
+    damageEnemy(enemy, poweredDamage, knockback);
   }
   if (boss.alive) {
     const toBoss = boss.group.position.clone().sub(player.position);
     toBoss.y = 0;
     const bossDistance = toBoss.length();
     if (bossDistance <= ability.range && (id !== 'emberwake' || bossDistance <= 5 || direction.dot(toBoss.clone().normalize()) >= 0.5)) {
-      damageBoss(ability.damage * 0.8, bossDistance > 0 ? toBoss.normalize().multiplyScalar(0.35) : new THREE.Vector3());
+      damageBoss(poweredDamage * 0.8, bossDistance > 0 ? toBoss.normalize().multiplyScalar(0.35) : new THREE.Vector3());
     }
   }
 }
@@ -1022,6 +1051,8 @@ function updateHud(): void {
     const ability = ABILITIES[id];
     const remaining = cooldowns[id] > 0 ? `  ${cooldowns[id].toFixed(1)}s` : '';
     card.querySelector<HTMLElement>('.ability-name')!.textContent = ability.label + remaining;
+    const mastery = card.querySelector<HTMLElement>('.ability-mastery');
+    if (mastery) mastery.textContent = `M${abilityMastery[id]} · ${Math.floor(abilityMasteryXp[id])}/${masteryThreshold(id)}`;
   }
 }
 
