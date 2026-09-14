@@ -69,6 +69,22 @@ canvas { display: block; width: 100%; height: 100%; cursor: crosshair; }
 
 .help { position: absolute; top: 28px; right: 30px; color: rgba(232,246,255,.72); font-size: 11px; text-align: right; line-height: 1.7; }
 .help b { color: #f2fbff; }
+.mobile-controls { display: none; }
+.touch-joystick { position: absolute; left: 22px; bottom: 22px; width: 116px; height: 116px; border: 1px solid rgba(208, 239, 250, .42); border-radius: 50%; background: radial-gradient(circle, rgba(44, 113, 136, .58), rgba(6, 21, 31, .68)); box-shadow: inset 0 0 20px rgba(168, 231, 250, .12), 0 10px 30px rgba(0,0,0,.3); touch-action: none; }
+.joystick-knob { position: absolute; top: 50%; left: 50%; width: 48px; height: 48px; transform: translate(-50%, -50%); border: 2px solid rgba(240, 251, 255, .72); border-radius: 50%; background: rgba(112, 203, 232, .56); box-shadow: 0 0 18px rgba(95, 201, 239, .5); pointer-events: none; }
+.touch-actions { position: absolute; right: 16px; bottom: 16px; display: grid; grid-template-columns: repeat(3, 52px); gap: 7px; align-items: end; }
+.touch-action { width: 52px; height: 44px; padding: 0; border: 1px solid rgba(203, 238, 248, .38); border-radius: 13px; color: #f3fbff; background: rgba(8, 28, 40, .82); font: 700 10px 'Inter', sans-serif; letter-spacing: .04em; box-shadow: 0 8px 22px rgba(0,0,0,.24); touch-action: none; -webkit-tap-highlight-color: transparent; }
+.touch-action:active { transform: scale(.94); background: rgba(76, 163, 190, .82); }
+.touch-run { color: #a9edb0; }
+.touch-jump { color: #f5d17b; }
+.touch-dodge { color: #b9ddff; }
+.touch-attack { color: #ff9d86; }
+.touch-guard { color: #d6c5ff; }
+.power-q { color: #ff9871; }
+.power-e { color: #77ddff; }
+.power-r { color: #d0a4ff; }
+.touch-interact { color: #f5d17b; }
+
 
 @media (max-width: 720px) {
   .brand { top: 16px; left: 17px; font-size: 17px; }
@@ -79,4 +95,20 @@ canvas { display: block; width: 100%; height: 100%; cursor: crosshair; }
   .quest-panel { top: 68px; left: 16px; width: 205px; }
   .abilities { right: 16px; bottom: 16px; flex-direction: column; gap: 5px; align-items: stretch; }
   .ability { min-width: 142px; padding: 8px 10px; }
+}
+@media (pointer: coarse), (max-width: 900px) {
+  .help { display: none; }
+  .mobile-controls { display: block; position: fixed; inset: 0; z-index: 20; pointer-events: none; }
+  .touch-joystick, .touch-actions { pointer-events: auto; }
+  .brand { top: 14px; left: 16px; font-size: 17px; }
+  .brand span { font-size: 8px; }
+  .zone-label { top: 59px; left: 16px; font-size: 8px; }
+  .quest-panel { top: 82px; left: 16px; width: 208px; padding: 10px 12px; }
+  .inventory-panel { top: 82px; right: 14px; width: 174px; padding: 10px; transform: scale(.86); transform-origin: top right; }
+  .status { left: 16px; bottom: 152px; width: 245px; padding: 11px 13px; }
+  .status-head { margin-bottom: 7px; }
+  .abilities { right: 14px; bottom: 154px; display: flex; flex-direction: column; gap: 5px; align-items: stretch; }
+  .ability { min-width: 138px; padding: 7px 9px; }
+  .ability-cost, .ability-mastery { margin-top: 3px; font-size: 8px; }
+  .boss-hud { top: 14px; width: 55vw; }
 }
