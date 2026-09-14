@@ -41,6 +41,14 @@ type Effect = {
   rate: number;
 };
 
+type Drop = {
+  mesh: THREE.Mesh;
+  item: string;
+  amount: number;
+  baseY: number;
+  phase: number;
+};
+
 const ABILITIES: Record<AbilityId, Ability> = {
   emberwake: { label: 'Emberwake', key: 'Q', color: 0xff6a2d, cooldown: 2.5, cost: 15, range: 22, damage: 28 },
   riftCurrent: { label: 'Rift Current', key: 'E', color: 0x44c9ff, cooldown: 6, cost: 25, range: 9, damage: 20 },
@@ -70,6 +78,16 @@ app.innerHTML = `
       <div class="boss-title"><span>THE ABYSSAL WARDEN</span><b id="boss-phase">PHASE 1</b></div>
       <div class="boss-bar"><i id="boss-bar-fill"></i></div>
       <div class="boss-value" id="boss-value">1000 / 1000</div>
+    </div>
+    <div class="inventory-panel" id="inventory-panel">
+      <div class="inventory-title">PACK <span>press I to hide</span></div>
+      <div class="inventory-grid">
+        <div><b id="inv-wildFruit">0</b><span>Wild Fruit</span></div>
+        <div><b id="inv-seaFiber">0</b><span>Sea Fiber</span></div>
+        <div><b id="inv-emberShard">0</b><span>Ember Shard</span></div>
+        <div><b id="inv-wardenCore">0</b><span>Warden Core</span></div>
+      </div>
+      <div class="craft-line">C · craft Tideguard Elixir <small>1 fruit + 3 fiber + 1 shard</small></div>
     </div>
   </div>
 `;
@@ -289,6 +307,7 @@ function makeBoss(): Boss {
 }
 
 const boss = makeBoss();
+const drops: Drop[] = [];
 
 const berries: THREE.Mesh[] = [];
 for (let i = 0; i < 7; i += 1) {
@@ -309,6 +328,7 @@ let stamina = 100;
 let level = 1;
 let xp = 0;
 let shells = 0;
+const inventory: Record<string, number> = { wildFruit: 0, seaFiber: 0, emberShard: 0, wardenCore: 0 };
 let survivalClock = 0;
 let dayClock = 1.3;
 const keys = new Set<string>();
@@ -329,7 +349,7 @@ function showMessage(text: string): void {
 }
 
 function saveGame(): void {
-  localStorage.setItem('tidebreakers-save', JSON.stringify({ health, hunger, thirst, level, xp, shells }));
+  localStorage.setItem('tidebreakers-save', JSON.stringify({ health, hunger, thirst, level, xp, shells, inventory }));
 }
 
 function loadGame(): void {
@@ -343,12 +363,13 @@ function loadGame(): void {
     level = typeof saved.level === 'number' ? saved.level : level;
     xp = typeof saved.xp === 'number' ? saved.xp : xp;
     shells = typeof saved.shells === 'number' ? saved.shells : shells;
+    if (saved.inventory && typeof saved.inventory === 'object') Object.assign(inventory, saved.inventory);
   } catch {
     localStorage.removeItem('tidebreakers-save');
   }
 }
 
-const gameSave = { health, hunger, thirst, level, xp, shells };
+const gameSave = { health, hunger, thirst, level, xp, shells, inventory };
 loadGame();
 
 function gainXp(amount: number): void {
@@ -363,6 +384,26 @@ function gainXp(amount: number): void {
   }
 }
 
+function spawnDrop(item: string, amount: number, position: THREE.Vector3, color: number): void {
+  const material = new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 1.7, roughness: 0.28, metalness: 0.48 });
+  const mesh = new THREE.Mesh(new THREE.IcosahedronGeometry(0.38, 1), material);
+  mesh.position.set(position.x, heightAt(position.x, position.z) + 0.8, position.z);
+  mesh.castShadow = true;
+  world.add(mesh);
+  drops.push({ mesh, item, amount, baseY: mesh.position.y, phase: position.x * 0.12 + position.z * 0.08 });
+}
+
+function collectDrop(drop: Drop): void {
+  inventory[drop.item] = (inventory[drop.item] ?? 0) + drop.amount;
+  world.remove(drop.mesh);
+  const material = drop.mesh.material as THREE.MeshStandardMaterial;
+  drop.mesh.geometry.dispose();
+  material.dispose();
+  const index = drops.indexOf(drop);
+  if (index >= 0) drops.splice(index, 1);
+  showMessage(`+${drop.amount} ${drop.item}`);
+}
+
 function damageEnemy(enemy: Enemy, amount: number, knockback: THREE.Vector3): void {
   if (!enemy.alive) return;
   enemy.hp -= amount;
@@ -374,6 +415,8 @@ function damageEnemy(enemy: Enemy, amount: number, knockback: THREE.Vector3): vo
     enemy.respawnTimer = 7;
     xp += 35;
     shells += 18;
+    spawnDrop('emberShard', 1, enemy.group.position, 0xff743e);
+    spawnDrop('seaFiber', 1, enemy.group.position.clone().add(new THREE.Vector3(0.8, 0, 0.3)), 0x77d6a1);
     gainXp(0);
     showMessage('+35 XP  /  +18 SHELLS');
   }
@@ -474,8 +517,11 @@ function damageBoss(amount: number, knockback: THREE.Vector3): void {
     boss.group.visible = false;
     xp += 450;
     shells += 250;
+    spawnDrop('wardenCore', 1, boss.group.position, 0x65d7ff);
+    spawnDrop('emberShard', 2, boss.group.position.clone().add(new THREE.Vector3(1.2, 0, 0)), 0xff743e);
+    spawnDrop('seaFiber', 4, boss.group.position.clone().add(new THREE.Vector3(-1.2, 0, 0)), 0x77d6a1);
     gainXp(0);
-    showMessage('WARDEN DEFEATED  /  +250 SHELLS');
+    showMessage('WARDEN DEFEATED  /  LOOT DROPPED');
   }
 }
 
@@ -513,17 +559,45 @@ function cast(id: AbilityId): void {
 }
 
 function gather(): void {
+  for (const drop of [...drops]) {
+    if (drop.mesh.position.distanceTo(player.position) <= 4.5) {
+      collectDrop(drop);
+      return;
+    }
+  }
   for (const berry of berries) {
     if (!berry.userData.active) continue;
     if (berry.position.distanceTo(player.position) > 4) continue;
     berry.userData.active = false;
     berry.userData.respawn = 14;
     berry.visible = false;
+    inventory.wildFruit += 1;
     hunger = Math.min(100, hunger + 23);
     thirst = Math.min(100, thirst + 5);
     showMessage('Wild fruit gathered  +23 hunger');
     return;
   }
+}
+
+function updateDrops(dt: number): void {
+  for (const drop of drops) {
+    drop.mesh.rotation.y += dt * 2.4;
+    drop.mesh.rotation.x += dt * 0.7;
+    drop.mesh.position.y = drop.baseY + Math.sin(survivalClock * 2.6 + drop.phase) * 0.16;
+  }
+}
+
+function craftTideguard(): void {
+  if (inventory.wildFruit < 1 || inventory.seaFiber < 3 || inventory.emberShard < 1) {
+    showMessage('Need 1 fruit, 3 fiber and 1 shard');
+    return;
+  }
+  inventory.wildFruit -= 1;
+  inventory.seaFiber -= 3;
+  inventory.emberShard -= 1;
+  health = Math.min(100, health + 38);
+  thirst = Math.min(100, thirst + 12);
+  showMessage('TIDEGUARD ELIXIR USED  +38 HEALTH');
 }
 
 function updateSurvival(dt: number): void {
@@ -693,6 +767,10 @@ function updateHud(): void {
   document.querySelector<HTMLElement>('#boss-bar-fill')!.style.width = `${Math.round((boss.hp / boss.maxHp) * 100)}%`;
   document.querySelector<HTMLElement>('#boss-value')!.textContent = `${Math.ceil(boss.hp)} / ${boss.maxHp}`;
   document.querySelector<HTMLElement>('#boss-phase')!.textContent = `PHASE ${boss.phase}`;
+  for (const item of ['wildFruit', 'seaFiber', 'emberShard', 'wardenCore']) {
+    const element = document.querySelector<HTMLElement>(`#inv-${item}`);
+    if (element) element.textContent = String(inventory[item] ?? 0);
+  }
   setBar('health', health);
   setBar('hunger', hunger);
   setBar('thirst', thirst);
@@ -715,6 +793,8 @@ window.addEventListener('keydown', (event) => {
   if (key === 'e') cast('riftCurrent');
   if (key === 'r') cast('stonebloom');
   if (key === 'f') gather();
+  if (key === 'c') craftTideguard();
+  if (key === 'i') document.querySelector<HTMLElement>('#inventory-panel')!.classList.toggle('hidden');
 });
 window.addEventListener('keyup', (event) => keys.delete(event.key.toLowerCase()));
 window.addEventListener('pointerdown', (event) => {
@@ -741,6 +821,7 @@ function loop(now: number): void {
   updateCamera();
   updateDayNight(dt);
   updateEffects(dt);
+  updateDrops(dt);
   updateHud();
   if (saveTimer > 10) { saveTimer = 0; saveGame(); }
   if (messageTimer > 0) { messageTimer -= dt; if (messageTimer <= 0) message.classList.remove('show'); }
