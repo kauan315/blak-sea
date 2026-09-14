@@ -6,7 +6,7 @@ export default defineConfig({
     transformIndexHtml(html) {
       return {
         html,
-        tags: [{ tag: 'script', attrs: { type: 'module', src: '/src/main.ts' }, injectTo: 'body' }]
+        tags: [{ tag: 'script', attrs: { type: 'module', src: './src/main.ts' }, injectTo: 'body' }]
       };
     }
   }]
