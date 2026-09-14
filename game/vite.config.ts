@@ -4,10 +4,8 @@ export default defineConfig({
   plugins: [{
     name: 'tidebreakers-entry',
     transformIndexHtml(html) {
-      return {
-        html,
-        tags: [{ tag: 'script', attrs: { type: 'module', src: './src/main.ts' }, injectTo: 'body' }]
-      };
+      const tag = '<scr' + 'ipt type=\"module\" src=\"/src/main.ts\"></scr' + 'ipt>';
+      return html.replace('</body>', tag + '</body>');
     }
   }]
 });
