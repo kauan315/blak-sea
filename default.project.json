@@ -1,0 +1,30 @@
+{
+  "name": "Tidebreakers",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "$className": "ReplicatedStorage",
+      "Shared": {
+        "$path": "src/ReplicatedStorage/Shared"
+      }
+    },
+    "ServerScriptService": {
+      "$className": "ServerScriptService",
+      "TidebreakersServer": {
+        "$path": "src/ServerScriptService/Tidebreakers.server.lua"
+      },
+      "WorldBootstrap": {
+        "$path": "src/ServerScriptService/WorldBootstrap.server.lua"
+      }
+    },
+    "StarterPlayer": {
+      "$className": "StarterPlayer",
+      "StarterPlayerScripts": {
+        "$className": "StarterPlayerScripts",
+        "AbilityClient": {
+          "$path": "src/StarterPlayer/StarterPlayerScripts/AbilityClient.client.lua"
+        }
+      }
+    }
+  }
+}
