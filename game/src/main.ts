@@ -830,6 +830,55 @@ function updateEnemies(dt: number): void {
   }
 }
 
+function updateBoss(dt: number): void {
+  if (!boss.alive) return;
+  boss.attackTimer -= dt;
+  boss.specialTimer -= dt;
+  const toPlayer = player.position.clone().sub(boss.group.position);
+  toPlayer.y = 0;
+  const distance = toPlayer.length();
+  const direction = distance > 0 ? toPlayer.normalize() : new THREE.Vector3(0, 0, 1);
+  if (distance < 46 && distance > 5.2) {
+    const speed = boss.phase === 2 ? 2.4 : 1.65;
+    boss.group.position.add(direction.clone().multiplyScalar(speed * dt));
+    boss.group.position.y = groundAt(boss.group.position.x, boss.group.position.z);
+    boss.group.rotation.y = Math.atan2(direction.x, direction.z);
+  }
+  if (distance <= 5.8 && boss.attackTimer <= 0) {
+    boss.attackTimer = boss.phase === 2 ? 0.9 : 1.35;
+    const damage = boss.phase === 2 ? 18 : 12;
+    if (guarding && stamina >= 12) {
+      stamina -= 12;
+      showMessage('WARDEN STRIKE BLOCKED');
+    } else {
+      if (guarding) {
+        guarding = false;
+        showMessage('GUARD BREAK');
+      }
+      health = Math.max(0, health - damage);
+      showMessage('THE WARDEN STRUCK YOU');
+    }
+  }
+  if (boss.specialTimer <= 0 && distance < 44) {
+    boss.specialTimer = boss.phase === 2 ? 4.2 : 6.4;
+    const radius = boss.phase === 2 ? 18 : 13;
+    createBossShockwave(boss.group.position, radius, boss.phase === 2 ? 0xff5e86 : 0x65d7ff);
+    if (distance <= radius) {
+      if (guarding && stamina >= 18) {
+        stamina -= 18;
+        showMessage('SHOCKWAVE BLOCKED');
+      } else {
+        if (guarding) {
+          guarding = false;
+          showMessage('GUARD BREAK');
+        }
+        health = Math.max(0, health - (boss.phase === 2 ? 24 : 16));
+        showMessage('EVADE THE WARDEN SHOCKWAVE');
+      }
+    }
+  }
+}
+
 function updateBoat(dt: number): void {
   boat.position.y = WATER_LEVEL + Math.sin(survivalClock * 2.2) * 0.12;
   boat.rotation.z = Math.sin(survivalClock * 1.7) * 0.025;
