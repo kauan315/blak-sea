@@ -21,6 +21,7 @@ type Enemy = {
   attackTimer: number;
   respawnTimer: number;
   spawn: THREE.Vector3;
+  kind: 'marauder' | 'ash';
 };
 
 type Boss = {
@@ -59,7 +60,7 @@ const app = document.querySelector<HTMLDivElement>('#app')!;
 app.innerHTML = `
   <div class="hud">
     <div class="brand">Tidebreakers <span>Eclipse Sea / survival action RPG</span></div>
-    <div class="help"><b>W A S D</b> move &nbsp; <b>SHIFT</b> dodge<br><b>Q E R</b> powers &nbsp; <b>CLICK</b> strike<br><b>F</b> gather from a glowing berry</div>
+    <div class="help"><b>W A S D</b> move / swim / sail &nbsp; <b>SHIFT</b> dodge<br><b>Q E R</b> powers &nbsp; <b>CLICK</b> strike<br><b>F</b> interact / gather &nbsp; <b>B</b> board boat</div>
     <div class="center-message" id="message"></div>
     <div class="crosshair"></div>
     <div class="status">
@@ -185,6 +186,64 @@ function addTree(position: THREE.Vector3, scale: number): void {
 }
 
 makeTerrain();
+
+const WATER_LEVEL = -1.55;
+const cinderCenter = new THREE.Vector3(190, 0, -70);
+const cinderRadius = 43;
+
+function isOnCinderCay(x: number, z: number): boolean {
+  const dx = x - cinderCenter.x;
+  const dz = z - cinderCenter.z;
+  return dx * dx + dz * dz <= (cinderRadius - 2) * (cinderRadius - 2);
+}
+
+function isOnStartIsland(x: number, z: number): boolean {
+  return Math.abs(x) <= 137 && Math.abs(z) <= 137;
+}
+
+function isWaterAt(x: number, z: number): boolean {
+  return !isOnStartIsland(x, z) && !isOnCinderCay(x, z);
+}
+
+function groundAt(x: number, z: number): number {
+  if (isOnCinderCay(x, z)) {
+    return 0.2 + heightAt(x - cinderCenter.x, z - cinderCenter.z) * 0.14;
+  }
+  if (isOnStartIsland(x, z)) return heightAt(x, z);
+  return WATER_LEVEL;
+}
+
+function makeCinderCay(): void {
+  const island = new THREE.Mesh(new THREE.CylinderGeometry(cinderRadius, cinderRadius + 4, 4.5, 48), new THREE.MeshStandardMaterial({ color: 0x6e625a, roughness: 0.92, metalness: 0.06 }));
+  island.position.set(cinderCenter.x, -0.45, cinderCenter.z);
+  island.receiveShadow = true;
+  island.castShadow = true;
+  world.add(island);
+  const top = new THREE.Mesh(new THREE.CylinderGeometry(cinderRadius - 2, cinderRadius - 2, 0.65, 48), new THREE.MeshStandardMaterial({ color: 0x8c684f, roughness: 0.94 }));
+  top.position.set(cinderCenter.x, 1.95, cinderCenter.z);
+  top.receiveShadow = true;
+  world.add(top);
+  const beacon = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.8, 8, 10), new THREE.MeshStandardMaterial({ color: 0x3a3d49, roughness: 0.72, metalness: 0.25 }));
+  beacon.position.set(cinderCenter.x, 5.4, cinderCenter.z);
+  beacon.castShadow = true;
+  world.add(beacon);
+  const flame = new THREE.Mesh(new THREE.SphereGeometry(0.7, 16, 12), new THREE.MeshStandardMaterial({ color: 0xff7a3e, emissive: 0xc8341a, emissiveIntensity: 2.8, roughness: 0.28 }));
+  flame.position.set(cinderCenter.x, 9.65, cinderCenter.z);
+  world.add(flame);
+  const fireLight = new THREE.PointLight(0xff6d3e, 3.4, 28);
+  fireLight.position.copy(flame.position);
+  world.add(fireLight);
+  for (let i = 0; i < 10; i += 1) {
+    const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(1.4 + (i % 3) * 0.4, 1), new THREE.MeshStandardMaterial({ color: 0x443c3e, roughness: 0.95 }));
+    const angle = i * 0.63;
+    rock.position.set(cinderCenter.x + Math.cos(angle) * (15 + (i % 4) * 4), 2.8, cinderCenter.z + Math.sin(angle) * (15 + (i % 4) * 4));
+    rock.scale.y = 1.5;
+    rock.castShadow = true;
+    world.add(rock);
+  }
+}
+
+makeCinderCay();
 for (let i = 0; i < 28; i += 1) {
   const x = Math.sin(i * 7.1) * 105;
   const z = Math.cos(i * 4.8) * 102;
@@ -230,12 +289,44 @@ function makePlayer(): THREE.Group {
 }
 
 const player = makePlayer();
-player.position.set(0, heightAt(0, 28), 28);
+player.position.set(0, groundAt(0, 28), 28);
 world.add(player);
 
-function makeEnemy(position: THREE.Vector3, index: number): Enemy {
+function makeBoat(): THREE.Group {
+  const boat = new THREE.Group();
+  boat.name = 'First Tide Skiff';
+  boat.position.set(16, WATER_LEVEL, 142);
+  const hull = new THREE.Mesh(new THREE.BoxGeometry(5.2, 0.85, 2.2), new THREE.MeshStandardMaterial({ color: 0x5b3526, roughness: 0.78 }));
+  hull.scale.z = 0.82;
+  hull.castShadow = true;
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(1.55, 0.12, 6, 24), new THREE.MeshStandardMaterial({ color: 0xa97a43, roughness: 0.48, metalness: 0.28 }));
+  rim.rotation.x = Math.PI / 2;
+  rim.scale.set(1.48, 0.58, 1);
+  rim.position.y = 0.5;
+  const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.14, 4.4, 8), new THREE.MeshStandardMaterial({ color: 0x6d4930, roughness: 0.8 }));
+  mast.position.y = 2.35;
+  mast.castShadow = true;
+  const sail = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 2.5), new THREE.MeshStandardMaterial({ color: 0xd9d0b5, roughness: 0.88, side: THREE.DoubleSide }));
+  sail.position.set(0.82, 2.45, 0);
+  sail.rotation.y = Math.PI / 2;
+  sail.castShadow = true;
+  const lantern = new THREE.Mesh(new THREE.SphereGeometry(0.18, 12, 10), new THREE.MeshStandardMaterial({ color: 0xffd16a, emissive: 0xff8d2d, emissiveIntensity: 2.2 }));
+  lantern.position.set(-1.9, 0.95, 0);
+  boat.add(hull, rim, mast, sail, lantern);
+  boat.userData.sail = sail;
+  const light = new THREE.PointLight(0xffb05b, 1.2, 8);
+  light.position.copy(lantern.position);
+  boat.add(light);
+  world.add(boat);
+  return boat;
+}
+
+const boat = makeBoat();
+let aboardBoat = false;
+
+function makeEnemy(position: THREE.Vector3, index: number, kind: 'marauder' | 'ash' = 'marauder'): Enemy {
   const group = new THREE.Group();
-  group.name = `Marauder-${index}`;
+  group.name = `${kind === 'ash' ? 'Ash Stalker' : 'Marauder'}-${index}`;
   const skin = new THREE.MeshStandardMaterial({ color: 0x996752, roughness: 0.82 });
   const cloth = new THREE.MeshStandardMaterial({ color: 0x4b2930, roughness: 0.78 });
   const armor = new THREE.MeshStandardMaterial({ color: 0x574e4f, roughness: 0.48, metalness: 0.3 });
@@ -250,9 +341,9 @@ function makeEnemy(position: THREE.Vector3, index: number): Enemy {
   pauldron.position.set(0.62, 2.05, 0);
   pauldron.castShadow = true;
   group.add(body, head, pauldron);
-  group.position.set(position.x, heightAt(position.x, position.z), position.z);
+  group.position.set(position.x, groundAt(position.x, position.z), position.z);
   world.add(group);
-  return { group, hp: 120, maxHp: 120, alive: true, attackTimer: 0, respawnTimer: 0, spawn: position.clone() };
+  return { group, hp: kind === 'ash' ? 170 : 120, maxHp: kind === 'ash' ? 170 : 120, alive: true, attackTimer: 0, respawnTimer: 0, spawn: position.clone(), kind };
 }
 
 const enemies: Enemy[] = [
@@ -261,10 +352,12 @@ const enemies: Enemy[] = [
   makeEnemy(new THREE.Vector3(24, 0, -9), 3),
   makeEnemy(new THREE.Vector3(-28, 0, 14), 4),
   makeEnemy(new THREE.Vector3(28, 0, 17), 5),
+  makeEnemy(new THREE.Vector3(176, 0, -64), 6, 'ash'),
+  makeEnemy(new THREE.Vector3(204, 0, -78), 7, 'ash'),
 ];
 
 function makeBoss(): Boss {
-  const arenaPosition = new THREE.Vector3(0, heightAt(0, -58), -58);
+  const arenaPosition = new THREE.Vector3(0, groundAt(0, -58), -58);
   const platform = new THREE.Mesh(new THREE.CylinderGeometry(19, 21, 0.9, 48), new THREE.MeshStandardMaterial({ color: 0x303944, roughness: 0.72, metalness: 0.22 }));
   platform.position.copy(arenaPosition).add(new THREE.Vector3(0, -0.25, 0));
   platform.receiveShadow = true;
@@ -317,7 +410,7 @@ const drops: Drop[] = [];
 function makeQuestNPC(): THREE.Group {
   const npc = new THREE.Group();
   npc.name = 'Maera Voss';
-  npc.position.set(0, heightAt(0, 23), 23);
+  npc.position.set(0, groundAt(0, 23), 23);
   const skin = new THREE.MeshStandardMaterial({ color: 0xb87563, roughness: 0.68 });
   const coat = new THREE.MeshStandardMaterial({ color: 0x162e3b, roughness: 0.54, metalness: 0.15 });
   const accent = new THREE.MeshStandardMaterial({ color: 0xf0b35b, emissive: 0x713d17, emissiveIntensity: 0.7, roughness: 0.36, metalness: 0.35 });
@@ -349,7 +442,7 @@ for (let i = 0; i < 7; i += 1) {
   const x = Math.sin(i * 5.4) * 54;
   const z = Math.cos(i * 4.1) * 50;
   const berry = new THREE.Mesh(new THREE.SphereGeometry(0.28, 12, 8), new THREE.MeshStandardMaterial({ color: 0xe56f5b, emissive: 0x542016, emissiveIntensity: 0.75 }));
-  berry.position.set(x, heightAt(x, z) + 0.4, z);
+  berry.position.set(x, groundAt(x, z) + 0.4, z);
   berry.castShadow = true;
   berry.userData = { active: true, respawn: 0 };
   world.add(berry);
@@ -426,7 +519,7 @@ function gainXp(amount: number): void {
 function spawnDrop(item: string, amount: number, position: THREE.Vector3, color: number): void {
   const material = new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 1.7, roughness: 0.28, metalness: 0.48 });
   const mesh = new THREE.Mesh(new THREE.IcosahedronGeometry(0.38, 1), material);
-  mesh.position.set(position.x, heightAt(position.x, position.z) + 0.8, position.z);
+  mesh.position.set(position.x, groundAt(position.x, position.z) + 0.8, position.z);
   mesh.castShadow = true;
   world.add(mesh);
   drops.push({ mesh, item, amount, baseY: mesh.position.y, phase: position.x * 0.12 + position.z * 0.08 });
@@ -447,15 +540,15 @@ function damageEnemy(enemy: Enemy, amount: number, knockback: THREE.Vector3): vo
   if (!enemy.alive) return;
   enemy.hp -= amount;
   enemy.group.position.add(knockback);
-  enemy.group.position.y = heightAt(enemy.group.position.x, enemy.group.position.z);
+  enemy.group.position.y = groundAt(enemy.group.position.x, enemy.group.position.z);
   if (enemy.hp <= 0) {
     enemy.alive = false;
     enemy.group.visible = false;
     enemy.respawnTimer = 7;
     xp += 35;
     shells += 18;
-    marauderKills += 1;
-    spawnDrop('emberShard', 1, enemy.group.position, 0xff743e);
+    marauderKills += enemy.kind === 'marauder' ? 1 : 0;
+    spawnDrop(enemy.kind === 'ash' ? 'emberShard' : 'emberShard', enemy.kind === 'ash' ? 2 : 1, enemy.group.position, 0xff743e);
     spawnDrop('seaFiber', 1, enemy.group.position.clone().add(new THREE.Vector3(0.8, 0, 0.3)), 0x77d6a1);
     gainXp(0);
     showMessage('+35 XP  /  +18 SHELLS');
@@ -546,7 +639,7 @@ function damageBoss(amount: number, knockback: THREE.Vector3): void {
   if (!boss.alive) return;
   boss.hp = Math.max(0, boss.hp - amount);
   boss.group.position.add(knockback);
-  boss.group.position.y = heightAt(boss.group.position.x, boss.group.position.z);
+  boss.group.position.y = groundAt(boss.group.position.x, boss.group.position.z);
   if (boss.hp <= boss.maxHp * 0.5 && boss.phase === 1) {
     boss.phase = 2;
     boss.specialTimer = 1.2;
@@ -667,7 +760,7 @@ function updateSurvival(dt: number): void {
     health = 100;
     hunger = 60;
     thirst = 60;
-    player.position.set(0, heightAt(0, 28), 28);
+    player.position.set(0, groundAt(0, 28), 28);
     showMessage('You washed ashore again');
   }
   for (const berry of berries) {
@@ -689,7 +782,7 @@ function updateEnemies(dt: number): void {
         enemy.alive = true;
         enemy.hp = enemy.maxHp;
         enemy.group.visible = true;
-        enemy.group.position.set(enemy.spawn.x, heightAt(enemy.spawn.x, enemy.spawn.z), enemy.spawn.z);
+        enemy.group.position.set(enemy.spawn.x, groundAt(enemy.spawn.x, enemy.spawn.z), enemy.spawn.z);
       }
       continue;
     }
@@ -699,7 +792,7 @@ function updateEnemies(dt: number): void {
     if (distance < 26 && distance > 2.7) {
       toPlayer.normalize();
       enemy.group.position.add(toPlayer.multiplyScalar(dt * 2.1));
-      enemy.group.position.y = heightAt(enemy.group.position.x, enemy.group.position.z);
+      enemy.group.position.y = groundAt(enemy.group.position.x, enemy.group.position.z);
       enemy.group.rotation.y = Math.atan2(toPlayer.x, toPlayer.z);
     }
     enemy.attackTimer -= dt;
@@ -711,72 +804,74 @@ function updateEnemies(dt: number): void {
   }
 }
 
+function updateBoat(dt: number): void {
+  boat.position.y = WATER_LEVEL + Math.sin(survivalClock * 2.2) * 0.12;
+  boat.rotation.z = Math.sin(survivalClock * 1.7) * 0.025;
+  const sail = boat.userData.sail as THREE.Object3D;
+  sail.rotation.z = Math.sin(survivalClock * 1.4) * 0.045;
+}
+
+function toggleBoat(): void {
+  if (aboardBoat) {
+    aboardBoat = false;
+    player.position.set(boat.position.x + 3.2, groundAt(boat.position.x + 3.2, boat.position.z), boat.position.z);
+    showMessage('DISEMBARKED');
+    return;
+  }
+  if (player.position.distanceTo(boat.position) <= 6) {
+    aboardBoat = true;
+    player.position.copy(boat.position).add(new THREE.Vector3(0, 1.2, 0));
+    showMessage('BOARDED  /  THE FIRST TIDE SKIFF');
+  }
+}
+
 function updatePlayer(dt: number): void {
   dodgeCooldown = Math.max(0, dodgeCooldown - dt);
   attackTimer = Math.max(0, attackTimer - dt);
+  if (aboardBoat) {
+    const boatMovement = getMovementDirection();
+    const driving = keys.has('w') || keys.has('a') || keys.has('s') || keys.has('d');
+    if (driving) {
+      boat.position.add(boatMovement.clone().multiplyScalar(10 * dt));
+      boat.position.x = THREE.MathUtils.clamp(boat.position.x, -260, 260);
+      boat.position.z = THREE.MathUtils.clamp(boat.position.z, -260, 260);
+      boat.rotation.y = Math.atan2(boatMovement.x, boatMovement.z);
+    }
+    player.position.copy(boat.position).add(new THREE.Vector3(0, 1.2, 0));
+    player.rotation.y = boat.rotation.y;
+    return;
+  }
   if (dodgeTimer > 0) {
     dodgeTimer -= dt;
     player.position.add(dodgeVelocity.clone().multiplyScalar(dt));
     dodgeVelocity.multiplyScalar(0.86);
-    player.position.y = heightAt(player.position.x, player.position.z);
+    player.position.y = isWaterAt(player.position.x, player.position.z) ? WATER_LEVEL + 0.2 : groundAt(player.position.x, player.position.z);
     return;
   }
 
   const movement = getMovementDirection();
   const isMoving = keys.has('w') || keys.has('a') || keys.has('s') || keys.has('d');
+  const swimming = isWaterAt(player.position.x, player.position.z);
   if (isMoving) {
-    const speed = stamina > 2 ? 7.2 : 2.4;
+    const speed = swimming ? 4.8 : (stamina > 2 ? 7.2 : 2.4);
     player.position.add(movement.clone().multiplyScalar(speed * dt));
     player.rotation.y = Math.atan2(movement.x, movement.z);
-    stamina = Math.max(0, stamina - dt * 3.2);
+    stamina = Math.max(0, stamina - dt * (swimming ? 5.5 : 3.2));
   }
-
   walkClock += dt * (isMoving ? 11 : 2.2);
   const rig = player.userData.rig as Record<string, THREE.Object3D>;
-  const stride = isMoving ? Math.sin(walkClock) * 0.55 : Math.sin(walkClock) * 0.035;
+  const stride = isMoving ? Math.sin(walkClock) * (swimming ? 0.28 : 0.55) : Math.sin(walkClock) * 0.035;
   rig.leftArm.rotation.x = stride;
   rig.rightArm.rotation.x = -stride;
   rig.leftLeg.rotation.x = -stride;
   rig.rightLeg.rotation.x = stride;
   rig.head.position.y = 3.05 + (isMoving ? Math.abs(Math.sin(walkClock)) * 0.035 : 0);
-  if (attackTimer > 0) {
-    rig.weapon.rotation.x = -Math.sin((attackTimer / 0.42) * Math.PI) * 1.3;
-  } else {
-    rig.weapon.rotation.x = 0;
-  }
+  if (attackTimer > 0) rig.weapon.rotation.x = -Math.sin((attackTimer / 0.42) * Math.PI) * 1.3;
+  else rig.weapon.rotation.x = 0;
 
-  player.position.x = THREE.MathUtils.clamp(player.position.x, -126, 126);
-  player.position.z = THREE.MathUtils.clamp(player.position.z, -126, 126);
-  player.position.y = heightAt(player.position.x, player.position.z);
-}
-
-function updateBoss(dt: number): void {
-  if (!boss.alive) return;
-  const toPlayer = player.position.clone().sub(boss.group.position);
-  toPlayer.y = 0;
-  const distance = toPlayer.length();
-  boss.attackTimer -= dt;
-  boss.specialTimer -= dt;
-  if (distance < 48 && distance > 6) {
-    toPlayer.normalize();
-    boss.group.position.add(toPlayer.multiplyScalar(dt * (boss.phase === 2 ? 3.2 : 2.25)));
-    boss.group.position.y = heightAt(boss.group.position.x, boss.group.position.z);
-    boss.group.rotation.y = Math.atan2(toPlayer.x, toPlayer.z);
-  }
-  if (distance <= 6.2 && boss.attackTimer <= 0) {
-    boss.attackTimer = boss.phase === 2 ? 0.9 : 1.35;
-    if (dodgeTimer <= 0) health = Math.max(0, health - (boss.phase === 2 ? 15 : 10));
-    showMessage(boss.phase === 2 ? 'WARDEN CRUSH' : 'WARDEN STRIKE');
-  }
-  if (boss.specialTimer <= 0) {
-    boss.specialTimer = boss.phase === 2 ? 4.4 : 7.2;
-    const radius = boss.phase === 2 ? 15 : 11;
-    createBossShockwave(boss.group.position, radius, boss.phase === 2 ? 0xff4b78 : 0x65d7ff);
-    if (distance <= radius && dodgeTimer <= 0) {
-      health = Math.max(0, health - (boss.phase === 2 ? 26 : 16));
-      showMessage('THE SEA BREAKS BENEATH YOU');
-    }
-  }
+  player.position.x = THREE.MathUtils.clamp(player.position.x, -260, 260);
+  player.position.z = THREE.MathUtils.clamp(player.position.z, -260, 260);
+  player.position.y = swimming ? WATER_LEVEL + 0.2 + Math.sin(survivalClock * 3.4) * 0.08 : groundAt(player.position.x, player.position.z);
 }
 
 function updateCamera(): void {
@@ -863,6 +958,7 @@ window.addEventListener('keydown', (event) => {
   if (key === 'e') cast('riftCurrent');
   if (key === 'r') cast('stonebloom');
   if (key === 'f') gather();
+  if (key === 'b') toggleBoat();
   if (key === 'c') craftTideguard();
   if (key === 'i') document.querySelector<HTMLElement>('#inventory-panel')!.classList.toggle('hidden');
 });
@@ -884,6 +980,7 @@ function loop(now: number): void {
   survivalClock += dt;
   saveTimer += dt;
   for (const id of Object.keys(cooldowns) as AbilityId[]) cooldowns[id] = Math.max(0, cooldowns[id] - dt);
+  updateBoat(dt);
   updatePlayer(dt);
   updateSurvival(dt);
   updateEnemies(dt);
