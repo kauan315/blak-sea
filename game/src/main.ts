@@ -61,6 +61,7 @@ const app = document.querySelector<HTMLDivElement>('#app')!;
 app.innerHTML = `
   <div class="hud">
     <div class="brand">Tidebreakers <span>Eclipse Sea / survival action RPG</span></div>
+    <div class="zone-label" id="zone-label">THE STARTING REEDS</div>
     <div class="help"><b>W A S D</b> move / swim / sail &nbsp; <b>SHIFT</b> dodge &nbsp; <b>RMB</b> guard<br><b>Q E R</b> powers &nbsp; <b>CLICK</b> strike<br><b>F</b> interact / gather &nbsp; <b>B</b> board boat</div>
     <div class="center-message" id="message"></div>
     <div class="crosshair"></div>
@@ -459,6 +460,7 @@ let xp = 0;
 let shells = 0;
 const inventory: Record<string, number> = { wildFruit: 0, seaFiber: 0, emberShard: 0, wardenCore: 0 };
 let questState: 'available' | 'active' | 'complete' = 'available';
+let cinderState: 'locked' | 'available' | 'complete' = 'locked';
 let marauderKills = 0;
 let survivalClock = 0;
 let dayClock = 1.3;
@@ -485,7 +487,7 @@ function showMessage(text: string): void {
 }
 
 function saveGame(): void {
-  localStorage.setItem('tidebreakers-save', JSON.stringify({ health, hunger, thirst, level, xp, shells, inventory, questState, marauderKills, abilityMastery, abilityMasteryXp }));
+  localStorage.setItem('tidebreakers-save', JSON.stringify({ health, hunger, thirst, level, xp, shells, inventory, questState, cinderState, marauderKills, abilityMastery, abilityMasteryXp }));
 }
 
 function loadGame(): void {
@@ -501,6 +503,8 @@ function loadGame(): void {
     shells = typeof saved.shells === 'number' ? saved.shells : shells;
     if (saved.inventory && typeof saved.inventory === 'object') Object.assign(inventory, saved.inventory);
     if (saved.questState === 'available' || saved.questState === 'active' || saved.questState === 'complete') questState = saved.questState;
+    if (saved.cinderState === 'locked' || saved.cinderState === 'available' || saved.cinderState === 'complete') cinderState = saved.cinderState;
+    if (questState === 'complete' && cinderState === 'locked') cinderState = 'available';
     if (typeof saved.marauderKills === 'number') marauderKills = saved.marauderKills;
     for (const id of Object.keys(ABILITIES) as AbilityId[]) {
       const savedMastery = saved.abilityMastery?.[id];
@@ -513,7 +517,7 @@ function loadGame(): void {
   }
 }
 
-const gameSave = { health, hunger, thirst, level, xp, shells, inventory, questState, marauderKills, abilityMastery, abilityMasteryXp };
+const gameSave = { health, hunger, thirst, level, xp, shells, inventory, questState, cinderState, marauderKills, abilityMastery, abilityMasteryXp };
 loadGame();
 
 function masteryThreshold(id: AbilityId): number {
@@ -735,12 +739,28 @@ function cast(id: AbilityId): void {
 }
 
 function gather(): void {
+  if (player.position.distanceTo(cinderCenter) <= 10) {
+    if (cinderState === 'locked') {
+      showMessage('RESTORE MAERA'S SIGNAL FIRST');
+    } else if (cinderState === 'available') {
+      cinderState = 'complete';
+      xp += 250;
+      shells += 150;
+      inventory.emberShard += 3;
+      gainXp(0);
+      showMessage('CINDER BEACON CLAIMED  /  +250 XP  +150 SHELLS');
+    } else {
+      showMessage('THE CINDER BEACON BURNS STEADILY');
+    }
+    return;
+  }
   if (player.position.distanceTo(questNpc.position) <= 5.5) {
     if (questState === 'available') {
       questState = 'active';
       showMessage('QUEST STARTED  /  ECHOES IN THE REEDS');
     } else if (questState === 'active' && marauderKills >= 3) {
       questState = 'complete';
+      cinderState = 'available';
       xp += 200;
       shells += 120;
       inventory.seaFiber += 2;
@@ -1036,10 +1056,17 @@ function updateHud(): void {
   } else if (questState === 'active') {
     questTitle.textContent = 'Echoes in the Reeds';
     questCopy.textContent = `Defeat Marauders: ${marauderKills}/3 · return to Maera`;
+  } else if (cinderState !== 'complete') {
+    questTitle.textContent = 'Sail to Cinder Cay';
+    questCopy.textContent = cinderState === 'locked' ? 'Restore the camp signal before crossing the sea.' : 'Reach the burning beacon and press F.';
   } else {
-    questTitle.textContent = 'Signal Restored';
-    questCopy.textContent = 'The camp has a future again.';
+    questTitle.textContent = 'Cinder Beacon Claimed';
+    questCopy.textContent = 'A new route is open beyond the ash.';
   }
+  const zoneLabel = document.querySelector<HTMLElement>('#zone-label')!;
+  const onCinder = isOnCinderCay(player.position.x, player.position.z);
+  zoneLabel.textContent = onCinder ? 'CINDER CAY  /  ASH FRONTIER' : 'THE STARTING REEDS';
+  zoneLabel.classList.toggle('cinder', onCinder);
   setBar('health', health);
   setBar('hunger', hunger);
   setBar('thirst', thirst);
