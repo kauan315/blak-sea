@@ -27,6 +27,17 @@ canvas { display: block; width: 100%; height: 100%; cursor: crosshair; }
 .bar-value { text-align: right; color: #f5fbff; font-variant-numeric: tabular-nums; }
 
 .abilities { position: absolute; right: 30px; bottom: 30px; display: flex; gap: 9px; align-items: end; }
+.inventory-panel { position: absolute; top: 88px; right: 30px; width: 204px; padding: 13px; border: 1px solid rgba(174, 226, 245, .18); border-radius: 13px; background: rgba(7, 19, 31, .78); box-shadow: 0 14px 45px rgba(0,0,0,.22); backdrop-filter: blur(12px); transition: opacity .2s, transform .2s; }
+.inventory-panel.hidden { opacity: 0; transform: translateY(-8px); pointer-events: none; }
+.inventory-title { display: flex; justify-content: space-between; margin-bottom: 10px; color: #eaf8ff; font-family: 'Barlow Condensed', sans-serif; font-size: 15px; letter-spacing: .1em; }
+.inventory-title span { color: #7daabd; font-family: Inter, sans-serif; font-size: 8px; letter-spacing: .03em; }
+.inventory-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+.inventory-grid div { padding: 7px 6px; border-radius: 8px; background: rgba(255,255,255,.06); }
+.inventory-grid b { display: block; color: #f4fbff; font-family: 'Barlow Condensed', sans-serif; font-size: 19px; }
+.inventory-grid span { display: block; margin-top: 2px; color: #8fb6c9; font-size: 8px; line-height: 1.2; text-transform: uppercase; }
+.craft-line { margin-top: 10px; color: #f4d98c; font-size: 9px; line-height: 1.4; }
+.craft-line small { display: block; color: #8fb6c9; font-size: 8px; }
+
 .boss-hud { position: absolute; top: 30px; left: 50%; width: min(520px, 54vw); transform: translateX(-50%); padding: 12px 16px; border: 1px solid rgba(255, 130, 151, .42); border-radius: 12px; background: rgba(21, 9, 22, .72); box-shadow: 0 16px 45px rgba(88, 16, 43, .32); opacity: 0; transition: opacity .28s; backdrop-filter: blur(10px); }
 .boss-hud.show { opacity: 1; }
 .boss-title { display: flex; justify-content: space-between; margin-bottom: 7px; color: #ffdce2; font-family: 'Barlow Condensed', sans-serif; font-size: 16px; letter-spacing: .1em; }
@@ -56,6 +67,7 @@ canvas { display: block; width: 100%; height: 100%; cursor: crosshair; }
   .help { top: 16px; right: 17px; font-size: 9px; }
   .status { left: 16px; bottom: 16px; width: 250px; padding: 12px; }
   .boss-hud { top: 76px; width: 72vw; }
+  .inventory-panel { top: 145px; right: 16px; width: 170px; }
   .abilities { right: 16px; bottom: 16px; flex-direction: column; gap: 5px; align-items: stretch; }
   .ability { min-width: 142px; padding: 8px 10px; }
 }
