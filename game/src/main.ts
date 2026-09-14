@@ -439,6 +439,35 @@ function makeQuestNPC(): THREE.Group {
 
 const questNpc = makeQuestNPC();
 
+function makeAshSeer(): THREE.Group {
+  const npc = new THREE.Group();
+  npc.name = 'Ash Seer';
+  const position = new THREE.Vector3(cinderCenter.x, groundAt(cinderCenter.x, cinderCenter.z + 16), cinderCenter.z + 16);
+  npc.position.copy(position);
+  const skin = new THREE.MeshStandardMaterial({ color: 0x6e4b48, roughness: 0.82 });
+  const cloak = new THREE.MeshStandardMaterial({ color: 0x231e29, roughness: 0.78, metalness: 0.18 });
+  const ember = new THREE.MeshStandardMaterial({ color: 0xff8550, emissive: 0x8e2818, emissiveIntensity: 2.4, roughness: 0.3 });
+  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.68, 1.35, 6, 12), cloak);
+  body.position.y = 1.7;
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.45, 18, 14), skin);
+  head.position.y = 3.12;
+  const hood = new THREE.Mesh(new THREE.ConeGeometry(0.7, 0.9, 8), cloak);
+  hood.position.y = 3.62;
+  const staff = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.1, 3.2, 8), ember);
+  staff.position.set(0.88, 1.7, 0);
+  staff.rotation.z = -0.12;
+  const crystal = new THREE.Mesh(new THREE.OctahedronGeometry(0.22, 1), ember);
+  crystal.position.set(0.88, 3.3, 0);
+  for (const part of [body, head, hood, staff, crystal]) { part.castShadow = true; npc.add(part); }
+  const light = new THREE.PointLight(0xff653d, 2.1, 12);
+  light.position.set(0.88, 3.3, 0);
+  npc.add(light);
+  world.add(npc);
+  return npc;
+}
+
+const cinderQuestNpc = makeAshSeer();
+
 const berries: THREE.Mesh[] = [];
 for (let i = 0; i < 7; i += 1) {
   const x = Math.sin(i * 5.4) * 54;
@@ -461,6 +490,8 @@ let shells = 0;
 const inventory: Record<string, number> = { wildFruit: 0, seaFiber: 0, emberShard: 0, wardenCore: 0 };
 let questState: 'available' | 'active' | 'complete' = 'available';
 let cinderState: 'locked' | 'available' | 'complete' = 'locked';
+let cinderQuestState: 'locked' | 'available' | 'active' | 'complete' = 'locked';
+let ashKills = 0;
 let marauderKills = 0;
 let survivalClock = 0;
 let dayClock = 1.3;
@@ -487,7 +518,7 @@ function showMessage(text: string): void {
 }
 
 function saveGame(): void {
-  localStorage.setItem('tidebreakers-save', JSON.stringify({ health, hunger, thirst, level, xp, shells, inventory, questState, cinderState, marauderKills, abilityMastery, abilityMasteryXp }));
+  localStorage.setItem('tidebreakers-save', JSON.stringify({ health, hunger, thirst, level, xp, shells, inventory, questState, cinderState, cinderQuestState, ashKills, marauderKills, abilityMastery, abilityMasteryXp }));
 }
 
 function loadGame(): void {
@@ -504,7 +535,10 @@ function loadGame(): void {
     if (saved.inventory && typeof saved.inventory === 'object') Object.assign(inventory, saved.inventory);
     if (saved.questState === 'available' || saved.questState === 'active' || saved.questState === 'complete') questState = saved.questState;
     if (saved.cinderState === 'locked' || saved.cinderState === 'available' || saved.cinderState === 'complete') cinderState = saved.cinderState;
+    if (saved.cinderQuestState === 'locked' || saved.cinderQuestState === 'available' || saved.cinderQuestState === 'active' || saved.cinderQuestState === 'complete') cinderQuestState = saved.cinderQuestState;
     if (questState === 'complete' && cinderState === 'locked') cinderState = 'available';
+    if (cinderState === 'complete' && cinderQuestState === 'locked') cinderQuestState = 'available';
+    if (typeof saved.ashKills === 'number') ashKills = saved.ashKills;
     if (typeof saved.marauderKills === 'number') marauderKills = saved.marauderKills;
     for (const id of Object.keys(ABILITIES) as AbilityId[]) {
       const savedMastery = saved.abilityMastery?.[id];
@@ -517,7 +551,7 @@ function loadGame(): void {
   }
 }
 
-const gameSave = { health, hunger, thirst, level, xp, shells, inventory, questState, cinderState, marauderKills, abilityMastery, abilityMasteryXp };
+const gameSave = { health, hunger, thirst, level, xp, shells, inventory, questState, cinderState, cinderQuestState, ashKills, marauderKills, abilityMastery, abilityMasteryXp };
 loadGame();
 
 function masteryThreshold(id: AbilityId): number {
@@ -584,10 +618,11 @@ function damageEnemy(enemy: Enemy, amount: number, knockback: THREE.Vector3): vo
     xp += 35;
     shells += 18;
     marauderKills += enemy.kind === 'marauder' ? 1 : 0;
+    ashKills += enemy.kind === 'ash' ? 1 : 0;
     spawnDrop(enemy.kind === 'ash' ? 'emberShard' : 'emberShard', enemy.kind === 'ash' ? 2 : 1, enemy.group.position, 0xff743e);
     spawnDrop('seaFiber', 1, enemy.group.position.clone().add(new THREE.Vector3(0.8, 0, 0.3)), 0x77d6a1);
     gainXp(0);
-    showMessage('+35 XP  /  +18 SHELLS');
+    showMessage(enemy.kind === 'ash' ? '+35 XP  /  ASH STALKER DOWN' : '+35 XP  /  +18 SHELLS');
   }
 }
 
@@ -744,6 +779,7 @@ function gather(): void {
       showMessage("RESTORE MAERA'S SIGNAL FIRST");
     } else if (cinderState === 'available') {
       cinderState = 'complete';
+      cinderQuestState = 'available';
       xp += 250;
       shells += 150;
       inventory.emberShard += 3;
@@ -751,6 +787,26 @@ function gather(): void {
       showMessage('CINDER BEACON CLAIMED  /  +250 XP  +150 SHELLS');
     } else {
       showMessage('THE CINDER BEACON BURNS STEADILY');
+    }
+    return;
+  }
+  if (player.position.distanceTo(cinderQuestNpc.position) <= 5.5) {
+    if (cinderState !== 'complete') {
+      showMessage('CLAIM THE CINDER BEACON FIRST');
+    } else if (cinderQuestState === 'available' || cinderQuestState === 'locked') {
+      cinderQuestState = 'active';
+      showMessage('QUEST STARTED  /  ASHES IN THE WIND');
+    } else if (cinderQuestState === 'active' && ashKills >= 2) {
+      cinderQuestState = 'complete';
+      xp += 400;
+      shells += 250;
+      inventory.emberShard += 4;
+      gainXp(0);
+      showMessage('QUEST COMPLETE  /  ASH SEER REWARDED YOU');
+    } else if (cinderQuestState === 'active') {
+      showMessage(`ASH SEER: ${ashKills}/2 ash stalkers defeated`);
+    } else {
+      showMessage('ASH SEER: The smoke has settled');
     }
     return;
   }
@@ -1059,9 +1115,12 @@ function updateHud(): void {
   } else if (cinderState !== 'complete') {
     questTitle.textContent = 'Sail to Cinder Cay';
     questCopy.textContent = cinderState === 'locked' ? 'Restore the camp signal before crossing the sea.' : 'Reach the burning beacon and press F.';
+  } else if (cinderQuestState !== 'complete') {
+    questTitle.textContent = 'Ashes in the Wind';
+    questCopy.textContent = cinderQuestState === 'active' ? `Defeat Ash Stalkers: ${ashKills}/2 · return to the Ash Seer` : 'Find the Ash Seer beside the burning beacon.';
   } else {
-    questTitle.textContent = 'Cinder Beacon Claimed';
-    questCopy.textContent = 'A new route is open beyond the ash.';
+    questTitle.textContent = 'Cinder Signal Stable';
+    questCopy.textContent = 'The ash frontier is ready for a deeper expedition.';
   }
   const zoneLabel = document.querySelector<HTMLElement>('#zone-label')!;
   const onCinder = isOnCinderCay(player.position.x, player.position.z);
