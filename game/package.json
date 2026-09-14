@@ -1,0 +1,19 @@
+{
+  "name": "tidebreakers-eclipse-sea",
+  "private": true,
+  "version": "0.2.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "three": "^0.180.0"
+  },
+  "devDependencies": {
+    "@types/three": "^0.180.0",
+    "typescript": "^5.7.2",
+    "vite": "^7.0.0"
+  }
+}
