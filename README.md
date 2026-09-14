@@ -21,11 +21,12 @@ Open the local URL printed by Vite. For a production check:
 ## Controls
 
 - WASD: move
+- Shift: dodge roll
 - Q: Emberwake, a focused fire wave
 - E: Rift Current, a close-range water pull
 - R: Stonebloom, a crystal shockwave
+- Left mouse: blade strike
 - F: gather a glowing wild fruit
-- Left mouse: Emberwake
 
 ## Stack
 
@@ -41,7 +42,7 @@ The first slice contains a procedural island, water, trees, rocks, a third-perso
 
 ## Next production milestones
 
-1. Replace procedural placeholder characters with original high-detail rigs and animation sets.
+1. Expand the procedural character into original high-detail rigs and authored animation sets.
 2. Add combo chains, dodge, guard break, hit reactions, enemy states, and a boss.
 3. Add island streaming, quests, crafting, inventory, loot, and persistent profiles.
 4. Add authored PBR materials, sound design, post-processing, accessibility, and performance budgets.
