@@ -23,6 +23,17 @@ type Enemy = {
   spawn: THREE.Vector3;
 };
 
+type Boss = {
+  group: THREE.Group;
+  hp: number;
+  maxHp: number;
+  phase: number;
+  alive: boolean;
+  attackTimer: number;
+  specialTimer: number;
+  spawn: THREE.Vector3;
+};
+
 type Effect = {
   mesh: THREE.Mesh;
   life: number;
@@ -54,6 +65,11 @@ app.innerHTML = `
       <div class="ability" id="ability-emberwake"><span class="ability-key">Q</span><span class="ability-name">Emberwake</span><span class="ability-cost">15 stamina</span></div>
       <div class="ability" id="ability-riftCurrent"><span class="ability-key">E</span><span class="ability-name">Rift Current</span><span class="ability-cost">25 stamina</span></div>
       <div class="ability" id="ability-stonebloom"><span class="ability-key">R</span><span class="ability-name">Stonebloom</span><span class="ability-cost">35 stamina</span></div>
+    </div>
+    <div class="boss-hud" id="boss-hud">
+      <div class="boss-title"><span>THE ABYSSAL WARDEN</span><b id="boss-phase">PHASE 1</b></div>
+      <div class="boss-bar"><i id="boss-bar-fill"></i></div>
+      <div class="boss-value" id="boss-value">1000 / 1000</div>
     </div>
   </div>
 `;
@@ -224,6 +240,56 @@ const enemies: Enemy[] = [
   makeEnemy(new THREE.Vector3(28, 0, 17), 5),
 ];
 
+function makeBoss(): Boss {
+  const arenaPosition = new THREE.Vector3(0, heightAt(0, -58), -58);
+  const platform = new THREE.Mesh(new THREE.CylinderGeometry(19, 21, 0.9, 48), new THREE.MeshStandardMaterial({ color: 0x303944, roughness: 0.72, metalness: 0.22 }));
+  platform.position.copy(arenaPosition).add(new THREE.Vector3(0, -0.25, 0));
+  platform.receiveShadow = true;
+  platform.castShadow = true;
+  world.add(platform);
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(17.6, 0.28, 10, 64), new THREE.MeshBasicMaterial({ color: 0xd9535f, transparent: true, opacity: 0.82 }));
+  ring.position.copy(arenaPosition).add(new THREE.Vector3(0, 0.38, 0));
+  ring.rotation.x = Math.PI / 2;
+  world.add(ring);
+  for (const x of [-14, 14]) {
+    const pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.82, 6, 8), new THREE.MeshStandardMaterial({ color: 0x4a515e, roughness: 0.86, metalness: 0.12 }));
+    pillar.position.copy(arenaPosition).add(new THREE.Vector3(x, 3, 0));
+    pillar.castShadow = true;
+    world.add(pillar);
+  }
+
+  const group = new THREE.Group();
+  group.name = 'Abyssal Warden';
+  group.position.copy(arenaPosition);
+  const skin = new THREE.MeshStandardMaterial({ color: 0x49384e, roughness: 0.66, metalness: 0.16 });
+  const armor = new THREE.MeshStandardMaterial({ color: 0x1d2f42, roughness: 0.34, metalness: 0.7 });
+  const glow = new THREE.MeshStandardMaterial({ color: 0x65d7ff, emissive: 0x207da4, emissiveIntensity: 2.8, roughness: 0.25, metalness: 0.3 });
+  const body = new THREE.Mesh(new THREE.CapsuleGeometry(1.28, 2.45, 8, 16), skin);
+  body.position.y = 2.25;
+  body.castShadow = true;
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.86, 20, 14), armor);
+  head.position.y = 4.7;
+  head.castShadow = true;
+  const core = new THREE.Mesh(new THREE.SphereGeometry(0.42, 16, 12), glow);
+  core.position.set(0, 2.5, -1.15);
+  core.castShadow = true;
+  const leftHorn = new THREE.Mesh(new THREE.ConeGeometry(0.32, 1.65, 8), glow);
+  const rightHorn = leftHorn.clone();
+  leftHorn.position.set(-0.62, 5.55, 0);
+  rightHorn.position.set(0.62, 5.55, 0);
+  leftHorn.rotation.z = -0.38;
+  rightHorn.rotation.z = 0.38;
+  const leftShoulder = new THREE.Mesh(new THREE.SphereGeometry(0.7, 12, 8), armor);
+  const rightShoulder = leftShoulder.clone();
+  leftShoulder.position.set(-1.35, 3.15, 0);
+  rightShoulder.position.set(1.35, 3.15, 0);
+  group.add(body, head, core, leftHorn, rightHorn, leftShoulder, rightShoulder);
+  world.add(group);
+  return { group, hp: 1000, maxHp: 1000, phase: 1, alive: true, attackTimer: 1.2, specialTimer: 4.5, spawn: arenaPosition };
+}
+
+const boss = makeBoss();
+
 const berries: THREE.Mesh[] = [];
 for (let i = 0; i < 7; i += 1) {
   const x = Math.sin(i * 5.4) * 54;
@@ -333,6 +399,15 @@ function createPowerEffect(id: AbilityId, origin: THREE.Vector3, direction: THRE
   effects.push({ mesh, life: 0.55, maxLife: 0.55, rate });
 }
 
+function createBossShockwave(origin: THREE.Vector3, radius: number, color: number): void {
+  const material = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.74, blending: THREE.AdditiveBlending, depthWrite: false });
+  const mesh = new THREE.Mesh(new THREE.TorusGeometry(radius * 0.32, 0.3, 10, 56), material);
+  mesh.position.copy(origin).add(new THREE.Vector3(0, 0.3, 0));
+  mesh.rotation.x = Math.PI / 2;
+  world.add(mesh);
+  effects.push({ mesh, life: 0.9, maxLife: 0.9, rate: 3.8 });
+}
+
 function createSlashEffect(origin: THREE.Vector3, direction: THREE.Vector3): void {
   const material = new THREE.MeshBasicMaterial({ color: 0xd7f5ff, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false });
   const mesh = new THREE.Mesh(new THREE.TorusGeometry(2.1, 0.12, 8, 32, Math.PI * 1.25), material);
@@ -375,6 +450,33 @@ function performBasicAttack(): void {
       damageEnemy(enemy, 18 + level * 2, direction.clone().multiplyScalar(1.25));
     }
   }
+  if (boss.alive) {
+    const toBoss = boss.group.position.clone().sub(player.position);
+    toBoss.y = 0;
+    if (toBoss.length() <= 5.2 && direction.dot(toBoss.normalize()) > 0.1) {
+      damageBoss(22 + level * 2, direction.clone().multiplyScalar(0.3));
+    }
+  }
+}
+
+function damageBoss(amount: number, knockback: THREE.Vector3): void {
+  if (!boss.alive) return;
+  boss.hp = Math.max(0, boss.hp - amount);
+  boss.group.position.add(knockback);
+  boss.group.position.y = heightAt(boss.group.position.x, boss.group.position.z);
+  if (boss.hp <= boss.maxHp * 0.5 && boss.phase === 1) {
+    boss.phase = 2;
+    boss.specialTimer = 1.2;
+    showMessage('THE WARDEN ENTERS PHASE 2');
+  }
+  if (boss.hp <= 0) {
+    boss.alive = false;
+    boss.group.visible = false;
+    xp += 450;
+    shells += 250;
+    gainXp(0);
+    showMessage('WARDEN DEFEATED  /  +250 SHELLS');
+  }
 }
 
 function cast(id: AbilityId): void {
@@ -399,6 +501,14 @@ function cast(id: AbilityId): void {
     const knockback = distance > 0 ? toEnemy.normalize().multiplyScalar(id === 'stonebloom' ? 1.6 : 0.85) : new THREE.Vector3();
     if (id === 'emberwake' && distance > 5 && direction.dot(toEnemy.clone().normalize()) < 0.62) continue;
     damageEnemy(enemy, ability.damage, knockback);
+  }
+  if (boss.alive) {
+    const toBoss = boss.group.position.clone().sub(player.position);
+    toBoss.y = 0;
+    const bossDistance = toBoss.length();
+    if (bossDistance <= ability.range && (id !== 'emberwake' || bossDistance <= 5 || direction.dot(toBoss.clone().normalize()) >= 0.5)) {
+      damageBoss(ability.damage * 0.8, bossDistance > 0 ? toBoss.normalize().multiplyScalar(0.35) : new THREE.Vector3());
+    }
   }
 }
 
@@ -508,6 +618,35 @@ function updatePlayer(dt: number): void {
   player.position.y = heightAt(player.position.x, player.position.z);
 }
 
+function updateBoss(dt: number): void {
+  if (!boss.alive) return;
+  const toPlayer = player.position.clone().sub(boss.group.position);
+  toPlayer.y = 0;
+  const distance = toPlayer.length();
+  boss.attackTimer -= dt;
+  boss.specialTimer -= dt;
+  if (distance < 48 && distance > 6) {
+    toPlayer.normalize();
+    boss.group.position.add(toPlayer.multiplyScalar(dt * (boss.phase === 2 ? 3.2 : 2.25)));
+    boss.group.position.y = heightAt(boss.group.position.x, boss.group.position.z);
+    boss.group.rotation.y = Math.atan2(toPlayer.x, toPlayer.z);
+  }
+  if (distance <= 6.2 && boss.attackTimer <= 0) {
+    boss.attackTimer = boss.phase === 2 ? 0.9 : 1.35;
+    if (dodgeTimer <= 0) health = Math.max(0, health - (boss.phase === 2 ? 15 : 10));
+    showMessage(boss.phase === 2 ? 'WARDEN CRUSH' : 'WARDEN STRIKE');
+  }
+  if (boss.specialTimer <= 0) {
+    boss.specialTimer = boss.phase === 2 ? 4.4 : 7.2;
+    const radius = boss.phase === 2 ? 15 : 11;
+    createBossShockwave(boss.group.position, radius, boss.phase === 2 ? 0xff4b78 : 0x65d7ff);
+    if (distance <= radius && dodgeTimer <= 0) {
+      health = Math.max(0, health - (boss.phase === 2 ? 26 : 16));
+      showMessage('THE SEA BREAKS BENEATH YOU');
+    }
+  }
+}
+
 function updateCamera(): void {
   const desired = player.position.clone().add(new THREE.Vector3(0, 7.4, 13.5));
   camera.position.lerp(desired, 0.09);
@@ -549,6 +688,11 @@ function updateHud(): void {
   };
   document.querySelector<HTMLElement>('#level')!.textContent = `LEVEL ${level}  /  XP ${xp}`;
   document.querySelector<HTMLElement>('#currency')!.textContent = `${shells} SHELLS`;
+  const bossHud = document.querySelector<HTMLElement>('#boss-hud')!;
+  bossHud.classList.toggle('show', boss.alive && player.position.distanceTo(boss.group.position) < 60);
+  document.querySelector<HTMLElement>('#boss-bar-fill')!.style.width = `${Math.round((boss.hp / boss.maxHp) * 100)}%`;
+  document.querySelector<HTMLElement>('#boss-value')!.textContent = `${Math.ceil(boss.hp)} / ${boss.maxHp}`;
+  document.querySelector<HTMLElement>('#boss-phase')!.textContent = `PHASE ${boss.phase}`;
   setBar('health', health);
   setBar('hunger', hunger);
   setBar('thirst', thirst);
@@ -593,6 +737,7 @@ function loop(now: number): void {
   updatePlayer(dt);
   updateSurvival(dt);
   updateEnemies(dt);
+  updateBoss(dt);
   updateCamera();
   updateDayNight(dt);
   updateEffects(dt);
