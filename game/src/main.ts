@@ -513,7 +513,7 @@ function loadGame(): void {
   }
 }
 
-const gameSave = { health, hunger, thirst, level, xp, shells, inventory, questState, marauderKills };
+const gameSave = { health, hunger, thirst, level, xp, shells, inventory, questState, marauderKills, abilityMastery, abilityMasteryXp };
 loadGame();
 
 function masteryThreshold(id: AbilityId): number {
