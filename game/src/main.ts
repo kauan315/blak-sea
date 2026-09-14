@@ -40,7 +40,7 @@ const app = document.querySelector<HTMLDivElement>('#app')!;
 app.innerHTML = `
   <div class="hud">
     <div class="brand">Tidebreakers <span>Eclipse Sea / survival action RPG</span></div>
-    <div class="help"><b>W A S D</b> move &nbsp; <b>Q E R</b> powers<br><b>F</b> gather from a glowing berry</div>
+    <div class="help"><b>W A S D</b> move &nbsp; <b>SHIFT</b> dodge<br><b>Q E R</b> powers &nbsp; <b>CLICK</b> strike<br><b>F</b> gather from a glowing berry</div>
     <div class="center-message" id="message"></div>
     <div class="crosshair"></div>
     <div class="status">
@@ -176,7 +176,17 @@ function makePlayer(): THREE.Group {
   weapon.position.set(0.95, 1.85, 0.12);
   weapon.rotation.z = -0.45;
   weapon.castShadow = true;
-  actor.add(torso, head, shoulder, weapon);
+  const leftArm = new THREE.Mesh(new THREE.CapsuleGeometry(0.18, 0.82, 4, 8), cloth);
+  const rightArm = new THREE.Mesh(new THREE.CapsuleGeometry(0.18, 0.82, 4, 8), cloth);
+  leftArm.position.set(-0.88, 1.72, 0);
+  rightArm.position.set(0.88, 1.72, 0);
+  const leftLeg = new THREE.Mesh(new THREE.CapsuleGeometry(0.22, 0.9, 4, 8), metal);
+  const rightLeg = new THREE.Mesh(new THREE.CapsuleGeometry(0.22, 0.9, 4, 8), metal);
+  leftLeg.position.set(-0.35, 0.45, 0);
+  rightLeg.position.set(0.35, 0.45, 0);
+  for (const limb of [leftArm, rightArm, leftLeg, rightLeg]) limb.castShadow = true;
+  actor.add(torso, head, shoulder, weapon, leftArm, rightArm, leftLeg, rightLeg);
+  actor.userData.rig = { head, weapon, leftArm, rightArm, leftLeg, rightLeg };
   return actor;
 }
 
@@ -237,6 +247,11 @@ let survivalClock = 0;
 let dayClock = 1.3;
 const keys = new Set<string>();
 const cooldowns: Record<AbilityId, number> = { emberwake: 0, riftCurrent: 0, stonebloom: 0 };
+let walkClock = 0;
+let dodgeTimer = 0;
+let dodgeCooldown = 0;
+let attackTimer = 0;
+const dodgeVelocity = new THREE.Vector3();
 const effects: Effect[] = [];
 const message = document.querySelector<HTMLDivElement>('#message')!;
 let messageTimer = 0;
@@ -316,6 +331,50 @@ function createPowerEffect(id: AbilityId, origin: THREE.Vector3, direction: THRE
   }
   world.add(mesh);
   effects.push({ mesh, life: 0.55, maxLife: 0.55, rate });
+}
+
+function createSlashEffect(origin: THREE.Vector3, direction: THREE.Vector3): void {
+  const material = new THREE.MeshBasicMaterial({ color: 0xd7f5ff, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false });
+  const mesh = new THREE.Mesh(new THREE.TorusGeometry(2.1, 0.12, 8, 32, Math.PI * 1.25), material);
+  mesh.position.copy(origin).add(direction.clone().multiplyScalar(1.3));
+  mesh.rotation.set(Math.PI / 2, Math.atan2(direction.x, direction.z), 0);
+  world.add(mesh);
+  effects.push({ mesh, life: 0.24, maxLife: 0.24, rate: 1.8 });
+}
+
+function getMovementDirection(): THREE.Vector3 {
+  const movement = new THREE.Vector3(
+    (keys.has('d') ? 1 : 0) - (keys.has('a') ? 1 : 0),
+    0,
+    (keys.has('s') ? 1 : 0) - (keys.has('w') ? 1 : 0),
+  );
+  if (movement.lengthSq() === 0) return new THREE.Vector3(0, 0, 1).applyQuaternion(player.quaternion).normalize();
+  return movement.normalize();
+}
+
+function startDodge(): void {
+  if (dodgeCooldown > 0 || stamina < 18 || dodgeTimer > 0) return;
+  dodgeTimer = 0.28;
+  dodgeCooldown = 0.85;
+  stamina -= 18;
+  dodgeVelocity.copy(getMovementDirection()).multiplyScalar(25);
+  showMessage('DODGE');
+}
+
+function performBasicAttack(): void {
+  if (attackTimer > 0 || dodgeTimer > 0) return;
+  attackTimer = 0.42;
+  const direction = new THREE.Vector3(0, 0, 1).applyQuaternion(player.quaternion).normalize();
+  const origin = player.position.clone().add(new THREE.Vector3(0, 1.7, 0));
+  createSlashEffect(origin, direction);
+  for (const enemy of enemies) {
+    if (!enemy.alive) continue;
+    const toEnemy = enemy.group.position.clone().sub(player.position);
+    toEnemy.y = 0;
+    if (toEnemy.length() <= 4.2 && direction.dot(toEnemy.normalize()) > 0.25) {
+      damageEnemy(enemy, 18 + level * 2, direction.clone().multiplyScalar(1.25));
+    }
+  }
 }
 
 function cast(id: AbilityId): void {
@@ -411,18 +470,39 @@ function updateEnemies(dt: number): void {
 }
 
 function updatePlayer(dt: number): void {
-  const movement = new THREE.Vector3(
-    (keys.has('d') ? 1 : 0) - (keys.has('a') ? 1 : 0),
-    0,
-    (keys.has('s') ? 1 : 0) - (keys.has('w') ? 1 : 0),
-  );
-  if (movement.lengthSq() > 0) {
-    movement.normalize();
+  dodgeCooldown = Math.max(0, dodgeCooldown - dt);
+  attackTimer = Math.max(0, attackTimer - dt);
+  if (dodgeTimer > 0) {
+    dodgeTimer -= dt;
+    player.position.add(dodgeVelocity.clone().multiplyScalar(dt));
+    dodgeVelocity.multiplyScalar(0.86);
+    player.position.y = heightAt(player.position.x, player.position.z);
+    return;
+  }
+
+  const movement = getMovementDirection();
+  const isMoving = keys.has('w') || keys.has('a') || keys.has('s') || keys.has('d');
+  if (isMoving) {
     const speed = stamina > 2 ? 7.2 : 2.4;
-    player.position.add(movement.multiplyScalar(speed * dt));
+    player.position.add(movement.clone().multiplyScalar(speed * dt));
     player.rotation.y = Math.atan2(movement.x, movement.z);
     stamina = Math.max(0, stamina - dt * 3.2);
   }
+
+  walkClock += dt * (isMoving ? 11 : 2.2);
+  const rig = player.userData.rig as Record<string, THREE.Object3D>;
+  const stride = isMoving ? Math.sin(walkClock) * 0.55 : Math.sin(walkClock) * 0.035;
+  rig.leftArm.rotation.x = stride;
+  rig.rightArm.rotation.x = -stride;
+  rig.leftLeg.rotation.x = -stride;
+  rig.rightLeg.rotation.x = stride;
+  rig.head.position.y = 3.05 + (isMoving ? Math.abs(Math.sin(walkClock)) * 0.035 : 0);
+  if (attackTimer > 0) {
+    rig.weapon.rotation.x = -Math.sin((attackTimer / 0.42) * Math.PI) * 1.3;
+  } else {
+    rig.weapon.rotation.x = 0;
+  }
+
   player.position.x = THREE.MathUtils.clamp(player.position.x, -126, 126);
   player.position.z = THREE.MathUtils.clamp(player.position.z, -126, 126);
   player.position.y = heightAt(player.position.x, player.position.z);
@@ -486,6 +566,7 @@ function updateHud(): void {
 window.addEventListener('keydown', (event) => {
   const key = event.key.toLowerCase();
   keys.add(key);
+  if (key === 'shift') startDodge();
   if (key === 'q') cast('emberwake');
   if (key === 'e') cast('riftCurrent');
   if (key === 'r') cast('stonebloom');
@@ -493,7 +574,7 @@ window.addEventListener('keydown', (event) => {
 });
 window.addEventListener('keyup', (event) => keys.delete(event.key.toLowerCase()));
 window.addEventListener('pointerdown', (event) => {
-  if (event.button === 0) cast('emberwake');
+  if (event.button === 0) performBasicAttack();
 });
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
