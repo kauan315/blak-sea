@@ -22,6 +22,7 @@ type Enemy = {
   respawnTimer: number;
   spawn: THREE.Vector3;
   kind: 'marauder' | 'ash';
+  staggerTimer: number;
 };
 
 type Boss = {
@@ -60,7 +61,7 @@ const app = document.querySelector<HTMLDivElement>('#app')!;
 app.innerHTML = `
   <div class="hud">
     <div class="brand">Tidebreakers <span>Eclipse Sea / survival action RPG</span></div>
-    <div class="help"><b>W A S D</b> move / swim / sail &nbsp; <b>SHIFT</b> dodge<br><b>Q E R</b> powers &nbsp; <b>CLICK</b> strike<br><b>F</b> interact / gather &nbsp; <b>B</b> board boat</div>
+    <div class="help"><b>W A S D</b> move / swim / sail &nbsp; <b>SHIFT</b> dodge &nbsp; <b>RMB</b> guard<br><b>Q E R</b> powers &nbsp; <b>CLICK</b> strike<br><b>F</b> interact / gather &nbsp; <b>B</b> board boat</div>
     <div class="center-message" id="message"></div>
     <div class="crosshair"></div>
     <div class="status">
@@ -343,7 +344,7 @@ function makeEnemy(position: THREE.Vector3, index: number, kind: 'marauder' | 'a
   group.add(body, head, pauldron);
   group.position.set(position.x, groundAt(position.x, position.z), position.z);
   world.add(group);
-  return { group, hp: kind === 'ash' ? 170 : 120, maxHp: kind === 'ash' ? 170 : 120, alive: true, attackTimer: 0, respawnTimer: 0, spawn: position.clone(), kind };
+  return { group, hp: kind === 'ash' ? 170 : 120, maxHp: kind === 'ash' ? 170 : 120, alive: true, attackTimer: 0, staggerTimer: 0, respawnTimer: 0, spawn: position.clone(), kind };
 }
 
 const enemies: Enemy[] = [
@@ -467,6 +468,9 @@ let walkClock = 0;
 let dodgeTimer = 0;
 let dodgeCooldown = 0;
 let attackTimer = 0;
+let comboStep = 0;
+let comboWindow = 0;
+let guarding = false;
 const dodgeVelocity = new THREE.Vector3();
 const effects: Effect[] = [];
 const message = document.querySelector<HTMLDivElement>('#message')!;
@@ -539,6 +543,7 @@ function collectDrop(drop: Drop): void {
 function damageEnemy(enemy: Enemy, amount: number, knockback: THREE.Vector3): void {
   if (!enemy.alive) return;
   enemy.hp -= amount;
+  enemy.staggerTimer = 0.28;
   enemy.group.position.add(knockback);
   enemy.group.position.y = groundAt(enemy.group.position.x, enemy.group.position.z);
   if (enemy.hp <= 0) {
@@ -612,25 +617,34 @@ function startDodge(): void {
   showMessage('DODGE');
 }
 
+function setGuarding(value: boolean): void {
+  guarding = value && dodgeTimer <= 0;
+  if (guarding) showMessage('GUARD');
+}
+
 function performBasicAttack(): void {
-  if (attackTimer > 0 || dodgeTimer > 0) return;
-  attackTimer = 0.42;
+  if (guarding || attackTimer > 0 || dodgeTimer > 0) return;
+  comboStep = comboWindow > 0 ? (comboStep % 3) + 1 : 1;
+  comboWindow = 1.05;
+  attackTimer = comboStep === 3 ? 0.58 : 0.34;
   const direction = new THREE.Vector3(0, 0, 1).applyQuaternion(player.quaternion).normalize();
   const origin = player.position.clone().add(new THREE.Vector3(0, 1.7, 0));
   createSlashEffect(origin, direction);
+  const damage = 16 + level * 2 + comboStep * 5;
+  const reach = 4.0 + comboStep * 0.35;
   for (const enemy of enemies) {
     if (!enemy.alive) continue;
     const toEnemy = enemy.group.position.clone().sub(player.position);
     toEnemy.y = 0;
-    if (toEnemy.length() <= 4.2 && direction.dot(toEnemy.normalize()) > 0.25) {
-      damageEnemy(enemy, 18 + level * 2, direction.clone().multiplyScalar(1.25));
+    if (toEnemy.length() <= reach && direction.dot(toEnemy.normalize()) > 0.25) {
+      damageEnemy(enemy, damage, direction.clone().multiplyScalar(comboStep === 3 ? 1.8 : 1.0));
     }
   }
   if (boss.alive) {
     const toBoss = boss.group.position.clone().sub(player.position);
     toBoss.y = 0;
-    if (toBoss.length() <= 5.2 && direction.dot(toBoss.normalize()) > 0.1) {
-      damageBoss(22 + level * 2, direction.clone().multiplyScalar(0.3));
+    if (toBoss.length() <= reach + 0.5 && direction.dot(toBoss.normalize()) > 0.1) {
+      damageBoss(damage * 1.05, direction.clone().multiplyScalar(comboStep === 3 ? 0.55 : 0.3));
     }
   }
 }
@@ -781,11 +795,14 @@ function updateEnemies(dt: number): void {
       if (enemy.respawnTimer <= 0) {
         enemy.alive = true;
         enemy.hp = enemy.maxHp;
+        enemy.staggerTimer = 0;
         enemy.group.visible = true;
         enemy.group.position.set(enemy.spawn.x, groundAt(enemy.spawn.x, enemy.spawn.z), enemy.spawn.z);
       }
       continue;
     }
+    enemy.staggerTimer = Math.max(0, enemy.staggerTimer - dt);
+    if (enemy.staggerTimer > 0) continue;
     const toPlayer = player.position.clone().sub(enemy.group.position);
     toPlayer.y = 0;
     const distance = toPlayer.length();
@@ -798,8 +815,17 @@ function updateEnemies(dt: number): void {
     enemy.attackTimer -= dt;
     if (distance < 3.1 && enemy.attackTimer <= 0) {
       enemy.attackTimer = 1.35;
-      health = Math.max(0, health - 8);
-      showMessage('A Marauder struck you');
+      if (guarding && stamina >= 6) {
+        stamina -= 6;
+        showMessage('BLOCKED');
+      } else {
+        if (guarding) {
+          guarding = false;
+          showMessage('GUARD BREAK');
+        }
+        health = Math.max(0, health - 8);
+        showMessage('A Marauder struck you');
+      }
     }
   }
 }
@@ -965,7 +991,13 @@ window.addEventListener('keydown', (event) => {
 window.addEventListener('keyup', (event) => keys.delete(event.key.toLowerCase()));
 window.addEventListener('pointerdown', (event) => {
   if (event.button === 0) performBasicAttack();
+  if (event.button === 2) setGuarding(true);
 });
+window.addEventListener('pointerup', (event) => {
+  if (event.button === 2) setGuarding(false);
+});
+window.addEventListener('contextmenu', (event) => event.preventDefault());
+window.addEventListener('blur', () => setGuarding(false));
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
@@ -980,6 +1012,8 @@ function loop(now: number): void {
   survivalClock += dt;
   saveTimer += dt;
   for (const id of Object.keys(cooldowns) as AbilityId[]) cooldowns[id] = Math.max(0, cooldowns[id] - dt);
+  comboWindow = Math.max(0, comboWindow - dt);
+  if (comboWindow === 0) comboStep = 0;
   updateBoat(dt);
   updatePlayer(dt);
   updateSurvival(dt);
